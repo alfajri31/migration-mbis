@@ -1,6 +1,7 @@
 package com.example.migrasi;
 
 import com.example.migrasi.service.CustomerMigration;
+import com.example.migrasi.service.DistrictMigration;
 import com.example.migrasi.service.ProvinceMigration;
 import com.example.migrasi.service.RegencyMigration;
 import org.springframework.boot.CommandLineRunner;
@@ -14,19 +15,22 @@ public class MigrasiApplication implements CommandLineRunner {
 
     // 🔥 Bisa isi banyak sekaligus
     private static final String[] MIGRATION_NAMES = {
-            "kota"
+            "kota","kecamatan"
     };
 
     private final CustomerMigration customerMigration;
     private final ProvinceMigration provinceMigration;
     private final RegencyMigration regencyMigration;
+    private final DistrictMigration districtMigration;
 
     public MigrasiApplication(CustomerMigration customerMigration,
                               ProvinceMigration provinceMigration,
-                              RegencyMigration regencyMigration) {
+                              RegencyMigration regencyMigration,
+                              DistrictMigration districtMigration) {
         this.customerMigration = customerMigration;
         this.provinceMigration = provinceMigration;
         this.regencyMigration = regencyMigration;
+        this.districtMigration = districtMigration;
     }
 
     public static void main(String[] args) {
@@ -52,6 +56,11 @@ public class MigrasiApplication implements CommandLineRunner {
                 case "kota" -> {
                     System.out.println("Running Regency Migration...");
                     regencyMigration.migrate();
+                }
+
+                case "kecamatan" -> {
+                    System.out.println("Running district Migration...");
+                    districtMigration.migrate();
                 }
 
                 default -> {

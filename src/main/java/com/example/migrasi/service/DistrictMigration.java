@@ -1,6 +1,6 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.model.Province;
+import com.example.migrasi.model.District;
 import com.example.migrasi.model.Regency;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -20,14 +20,14 @@ import java.util.Map;
 
 @Slf4j
 @Service
-public class RegencyMigration {
+public class DistrictMigration {
 
-    private static final String FILE_PATH = "data/csv/kota.csv";
+    private static final String FILE_PATH = "data/csv/kecamatan.csv";
     private static final int SKIP_ROWS = 1;   // header
     private static final int BATCH_SIZE = 500;
     private static final int IDX_ID = 0;
-    private static final int IDX_province_id = 1;
-    private static final int IDX_kota_name = 2;
+    private static final int IDX_kota_id = 1;
+    private static final int IDX_kecamatan_name = 2;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -36,7 +36,7 @@ public class RegencyMigration {
     public void migrate() {
         log.info("Running province migration from CSV: {}", FILE_PATH);
 
-        List<Regency> entities = new ArrayList<>();
+        List<District> entities = new ArrayList<>();
 
         try (BufferedReader br = new BufferedReader(
                 new InputStreamReader(Files.newInputStream(Path.of(FILE_PATH)), StandardCharsets.UTF_8))) {
@@ -62,17 +62,17 @@ public class RegencyMigration {
                 String[] cols = splitCsvSimple(line);
 
                 String idStr = getByIndex(cols, IDX_ID);
-                String idProvinsi  = getByIndex(cols, IDX_province_id);
-                String name  = getByIndex(cols, IDX_kota_name);
+                String idKota  = getByIndex(cols, IDX_kota_id);
+                String name  = getByIndex(cols, IDX_kecamatan_name);
 
                 if (idStr == null || idStr.isBlank()) {
                     log.warn("Skip row {}: id kosong", rowNumber);
                     continue;
                 }
 
-                Regency p = new Regency();
+                District p = new District();
                 p.setId(Integer.parseInt(idStr));
-                p.setIdProvinsi(Integer.parseInt(idProvinsi));
+                p.setIdKota(Integer.parseInt(idKota));
                 p.setNama(name);
                 entities.add(p);
             }
@@ -90,20 +90,20 @@ public class RegencyMigration {
     }
 
     @jakarta.transaction.Transactional
-    public void bulkUpsert(List<Regency> entities) {
+    public void bulkUpsert(List<District> entities) {
         try {
             if (entities == null || entities.isEmpty()) return;
 
             int processed = 0;
 
-            for (Regency e : entities) {
+            for (District e : entities) {
                 if (e.getId() == null) {
                     log.warn("Skip: cif kosong");
                     continue;
                 }
 
                 Integer existingId = entityManager.createQuery(
-                                "select c.id from Regency c where c.id = :id", Integer.class)
+                                "select c.id from District c where c.id = :id", Integer.class)
                         .setParameter("id", e.getId())
                         .setMaxResults(1)
                         .getResultStream()
