@@ -1,9 +1,6 @@
 package com.example.migrasi;
 
-import com.example.migrasi.service.CustomerMigration;
-import com.example.migrasi.service.DistrictMigration;
-import com.example.migrasi.service.ProvinceMigration;
-import com.example.migrasi.service.RegencyMigration;
+import com.example.migrasi.service.*;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -15,22 +12,25 @@ public class MigrasiApplication implements CommandLineRunner {
 
     // 🔥 Bisa isi banyak sekaligus
     private static final String[] MIGRATION_NAMES = {
-            "kota","kecamatan"
+            "kecamatan"
     };
 
     private final CustomerMigration customerMigration;
     private final ProvinceMigration provinceMigration;
     private final RegencyMigration regencyMigration;
     private final DistrictMigration districtMigration;
+    private final VillagesMigration villagesMigration;
 
     public MigrasiApplication(CustomerMigration customerMigration,
                               ProvinceMigration provinceMigration,
                               RegencyMigration regencyMigration,
-                              DistrictMigration districtMigration) {
+                              DistrictMigration districtMigration,
+                              VillagesMigration villagesMigration) {
         this.customerMigration = customerMigration;
         this.provinceMigration = provinceMigration;
         this.regencyMigration = regencyMigration;
         this.districtMigration = districtMigration;
+        this.villagesMigration = villagesMigration;
     }
 
     public static void main(String[] args) {
@@ -61,6 +61,11 @@ public class MigrasiApplication implements CommandLineRunner {
                 case "kecamatan" -> {
                     System.out.println("Running district Migration...");
                     districtMigration.migrate();
+                }
+
+                case "kelurahan" -> {
+                    System.out.println("Running district Migration...");
+                    villagesMigration.migrate();
                 }
 
                 default -> {
