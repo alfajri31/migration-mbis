@@ -141,7 +141,6 @@ public class CustomerMigration {
                         .getResultStream()
                         .findFirst()
                         .orElse(null);
-
                 if (existingId != null) {
                     e.setId(existingId);     // penting: set PK supaya merge = UPDATE
                     entityManager.merge(e);
