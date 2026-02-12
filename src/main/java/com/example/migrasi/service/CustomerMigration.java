@@ -18,7 +18,7 @@ import java.util.*;
 @Service
 public class CustomerMigration {
 
-    private static final String FILE_PATH = "data/customer.xlsx";
+    private static final String FILE_PATH = "data/xlsx/customer.xlsx";
     private static final String SHEET_NAME = "Mitra"; // nama tab excel
     private static final int SKIP_ROWS = 1;                 // header row
     private static final int BATCH_SIZE = 500;
