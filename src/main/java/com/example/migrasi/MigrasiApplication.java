@@ -2,22 +2,31 @@ package com.example.migrasi;
 
 import com.example.migrasi.service.CustomerMigration;
 import com.example.migrasi.service.ProvinceMigration;
+import com.example.migrasi.service.RegencyMigration;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+import java.util.Arrays;
+
 @SpringBootApplication
 public class MigrasiApplication implements CommandLineRunner {
 
-    // 🔥 Hardcode di sini
-    private static final String MIGRATION_NAME = "provinsi";
+    // 🔥 Bisa isi banyak sekaligus
+    private static final String[] MIGRATION_NAMES = {
+            "kota"
+    };
 
     private final CustomerMigration customerMigration;
     private final ProvinceMigration provinceMigration;
+    private final RegencyMigration regencyMigration;
 
-    public MigrasiApplication(CustomerMigration customerMigration, ProvinceMigration provinceMigration) {
+    public MigrasiApplication(CustomerMigration customerMigration,
+                              ProvinceMigration provinceMigration,
+                              RegencyMigration regencyMigration) {
         this.customerMigration = customerMigration;
         this.provinceMigration = provinceMigration;
+        this.regencyMigration = regencyMigration;
     }
 
     public static void main(String[] args) {
@@ -26,12 +35,31 @@ public class MigrasiApplication implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if ("customer".equalsIgnoreCase(MIGRATION_NAME)) {
-            customerMigration.migrate();
+
+        for (String migrationName : MIGRATION_NAMES) {
+
+            switch (migrationName.toLowerCase()) {
+                case "customer" -> {
+                    System.out.println("Running Customer Migration...");
+                    customerMigration.migrate();
+                }
+
+                case "provinsi" -> {
+                    System.out.println("Running Province Migration...");
+                    provinceMigration.migrate();
+                }
+
+                case "kota" -> {
+                    System.out.println("Running Regency Migration...");
+                    regencyMigration.migrate();
+                }
+
+                default -> {
+                    System.out.println("Unknown migration: " + migrationName);
+                }
+            }
         }
-        else if ("provinsi".equalsIgnoreCase(MIGRATION_NAME)) {
-            provinceMigration.migrate();
-        }
-        System.exit(0); // optional biar langsung selesai
+
+        System.exit(0); // optional
     }
 }

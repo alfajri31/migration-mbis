@@ -1,7 +1,7 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.model.CustomerDraft;
 import com.example.migrasi.model.Province;
+import com.example.migrasi.model.Regency;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
@@ -13,19 +13,21 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
-
-import static java.net.NetworkInterface.getByIndex;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
-public class ProvinceMigration {
+public class RegencyMigration {
 
-    private static final String FILE_PATH = "data/csv/provinsi.csv";
+    private static final String FILE_PATH = "data/csv/kota.csv";
     private static final int SKIP_ROWS = 1;   // header
     private static final int BATCH_SIZE = 500;
-    private static final int IDX_COL_0 = 0;
-    private static final int IDX_COL_1 = 1;
+    private static final int IDX_ID = 0;
+    private static final int IDX_province_id = 1;
+    private static final int IDX_kota_name = 2;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -34,7 +36,7 @@ public class ProvinceMigration {
     public void migrate() {
         log.info("Running province migration from CSV: {}", FILE_PATH);
 
-        List<Province> entities = new ArrayList<>();
+        List<Regency> entities = new ArrayList<>();
 
         try (BufferedReader br = new BufferedReader(
                 new InputStreamReader(Files.newInputStream(Path.of(FILE_PATH)), StandardCharsets.UTF_8))) {
@@ -59,17 +61,19 @@ public class ProvinceMigration {
 
                 String[] cols = splitCsvSimple(line);
 
-                String idStr = getByIndex(cols, IDX_COL_0);
-                String name  = getByIndex(cols, IDX_COL_1);
+                String idStr = getByIndex(cols, IDX_ID);
+                String idProvinsi  = getByIndex(cols, IDX_province_id);
+                String name  = getByIndex(cols, IDX_kota_name);
 
                 if (idStr == null || idStr.isBlank()) {
                     log.warn("Skip row {}: id kosong", rowNumber);
                     continue;
                 }
 
-                Province p = new Province();
+                Regency p = new Regency();
                 p.setId(Integer.parseInt(idStr));
-                p.setNama(name.trim());
+                p.setIdProvinsi(Integer.parseInt(idProvinsi));
+                p.setNama(name);
                 entities.add(p);
             }
 
@@ -86,13 +90,13 @@ public class ProvinceMigration {
     }
 
     @jakarta.transaction.Transactional
-    public void bulkUpsert(List<Province> entities) {
+    public void bulkUpsert(List<Regency> entities) {
         try {
             if (entities == null || entities.isEmpty()) return;
 
             int processed = 0;
 
-            for (Province e : entities) {
+            for (Regency e : entities) {
                 if (e.getId() == null) {
                     log.warn("Skip: cif kosong");
                     continue;
