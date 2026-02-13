@@ -70,7 +70,7 @@ public class CustomerMigration {
                 String alamat = getValue(row, colIndex, "Alamat");
                 String bumn_non_bumn = getValue(row, colIndex, "BUMN / Non BUMN");
                 String kategori = getValue(row, colIndex, "Kategori");
-                String Jenis_perusahaan = getValue(row, colIndex, "Jenis Perusahaan");
+                String jenis_perusahaan = getValue(row, colIndex, "Jenis Perusahaan");
                 String jenis_usaha = getValue(row, colIndex, "Jenis Usaha");
                 String npwp = getValue(row, colIndex, "NPWP");
                 String nama_customer = getValue(row, colIndex, "Nama Customer");
@@ -91,7 +91,7 @@ public class CustomerMigration {
                 String generator = getValue(row, colIndex, "Generator");
 
                 //id null then skip
-                if (cif == null || cif.isBlank()) {
+                if (cif == null || cif.isBlank() || jenis_perusahaan == null || jenis_perusahaan.isBlank()) {
                     log.warn("Skip row {}: CIF kosong", rowNumber);
                     continue;
                 }
@@ -101,11 +101,12 @@ public class CustomerMigration {
 */
                 CustomerDraft e = new CustomerDraft();
                 e.setCif(cif.replaceAll("\\s+", ""));
-                e.setNamaCustomer(nama_customer);
+                e.setNamaCustomer(nama);
                 e.setNamaRm(nama_rm);
                 e.setNpwp(npwp);
                 e.setAlamat(alamat);
                 e.setFoto(foto);
+                e.setBentukCustomer(jenis_perusahaan.toUpperCase());
                 entities.add(e);
             }
 

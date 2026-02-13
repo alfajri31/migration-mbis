@@ -5,14 +5,12 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-import java.util.Arrays;
-
 @SpringBootApplication
 public class MigrasiApplication implements CommandLineRunner {
 
     // 🔥 Bisa isi banyak sekaligus
     private static final String[] MIGRATION_NAMES = {
-            "kecamatan"
+            "kota","kecamatan","kelurahan","provinsi"
     };
 
     private final CustomerMigration customerMigration;
@@ -73,7 +71,6 @@ public class MigrasiApplication implements CommandLineRunner {
                 }
             }
         }
-
         System.exit(0); // optional
     }
 }
