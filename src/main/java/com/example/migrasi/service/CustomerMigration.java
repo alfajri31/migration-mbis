@@ -2,12 +2,18 @@ package com.example.migrasi.service;
 
 import com.example.migrasi.model.Customer;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
 
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -22,6 +28,9 @@ public class CustomerMigration {
     private static final String SHEET_NAME = "Mitra"; // nama tab excel
     private static final int SKIP_ROWS = 1;                 // header row
     private static final int BATCH_SIZE = 500;
+
+    @Autowired
+    private PlatformTransactionManager txManager;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -122,16 +131,21 @@ public class CustomerMigration {
         log.info("Migration selesai.");
     }
 
-    @Transactional
     public void bulkUpsert(List<Customer> entities) {
-        try {
-            if (entities == null || entities.isEmpty()) return;
+        if (entities == null || entities.isEmpty()) return;
 
-            int processed = 0;
+        int processed = 0;
 
-            for (Customer e : entities) {
+        for (Customer e : entities) {
+            DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+            def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+            TransactionStatus status = txManager.getTransaction(def); // BEGIN
+
+            try {
                 if (e.getCif() == null || e.getCif().isBlank()) {
                     log.warn("Skip: cif kosong");
+                    txManager.commit(status); // commit kosong biar rapih
                     continue;
                 }
 
@@ -144,27 +158,28 @@ public class CustomerMigration {
                         .orElse(null);
 
                 if (existingId != null) {
-                    e.setId(existingId);     // penting: set PK supaya merge = UPDATE
+                    e.setId(existingId);
                     entityManager.merge(e);
                 } else {
-                    entityManager.persist(e); // INSERT (id akan di-generate kalau mapping benar)
+                    entityManager.persist(e);
                 }
 
-                if (++processed % BATCH_SIZE == 0) {
-                    entityManager.flush();
-                    entityManager.clear();
-                    log.info("Processed: {}", processed);
-                }
+                entityManager.flush();
+                entityManager.clear();
+
+                txManager.commit(status); // COMMIT ✅
+                processed++;
+
+            } catch (Exception ex) {
+                txManager.rollback(status); // ROLLBACK ❌ (cuma item ini)
+                entityManager.clear();      // bersihin persistence context
+                log.warn("Skip error cif {} : {}", e.getCif(), ex.getMessage());
             }
-
-            entityManager.flush();
-            entityManager.clear();
-            log.info("Total processed: {}", processed);
-        }catch (Exception e) {
-            log.info("something error occured when upsert: ",e);
-            throw  e;
         }
+
+        log.info("Total processed: {}", processed);
     }
+
 
 
     private Map<String, Integer> buildColumnIndex(Row headerRow) {
