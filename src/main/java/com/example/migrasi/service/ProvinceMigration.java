@@ -1,6 +1,5 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.model.CustomerDraft;
 import com.example.migrasi.model.Province;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -14,8 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-
-import static java.net.NetworkInterface.getByIndex;
 
 @Slf4j
 @Service

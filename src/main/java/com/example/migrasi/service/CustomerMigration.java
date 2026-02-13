@@ -1,6 +1,6 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.model.CustomerDraft;
+import com.example.migrasi.model.Customer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
@@ -30,7 +30,7 @@ public class CustomerMigration {
     public void migrate() {
         log.info("Running migration from sheet: {}", SHEET_NAME);
 
-        List<CustomerDraft> entities = new ArrayList<>();
+        List<Customer> entities = new ArrayList<>();
 
         try (InputStream is = Files.newInputStream(Path.of(FILE_PATH));
              Workbook workbook = new XSSFWorkbook(is)) {
@@ -99,7 +99,7 @@ public class CustomerMigration {
                 /*
 ************************************************************************************************************************
 */
-                CustomerDraft e = new CustomerDraft();
+                Customer e = new Customer();
                 e.setCif(cif.replaceAll("\\s+", ""));
                 e.setNamaCustomer(nama);
                 e.setNamaRm(nama_rm);
@@ -123,20 +123,20 @@ public class CustomerMigration {
     }
 
     @Transactional
-    public void bulkUpsert(List<CustomerDraft> entities) {
+    public void bulkUpsert(List<Customer> entities) {
         try {
             if (entities == null || entities.isEmpty()) return;
 
             int processed = 0;
 
-            for (CustomerDraft e : entities) {
+            for (Customer e : entities) {
                 if (e.getCif() == null || e.getCif().isBlank()) {
                     log.warn("Skip: cif kosong");
                     continue;
                 }
 
                 UUID existingId = entityManager.createQuery(
-                                "select c.id from CustomerDraft c where c.cif = :cif", UUID.class)
+                                "select c.id from Customer c where c.cif = :cif", UUID.class)
                         .setParameter("cif", e.getCif())
                         .setMaxResults(1)
                         .getResultStream()
