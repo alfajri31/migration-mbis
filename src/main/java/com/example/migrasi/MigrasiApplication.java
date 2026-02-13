@@ -10,7 +10,7 @@ public class MigrasiApplication implements CommandLineRunner {
 
     // 🔥 Bisa isi banyak sekaligus
     private static final String[] MIGRATION_NAMES = {
-            "kota","kecamatan","kelurahan","provinsi"
+            "provinsi","kota","kecamatan","kelurahan"
     };
 
     private final CustomerMigration customerMigration;

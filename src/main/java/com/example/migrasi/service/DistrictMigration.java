@@ -1,7 +1,6 @@
 package com.example.migrasi.service;
 
 import com.example.migrasi.model.District;
-import com.example.migrasi.model.Regency;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +22,7 @@ import java.util.Map;
 public class DistrictMigration {
 
     private static final String FILE_PATH = "data/csv/kecamatan.csv";
-    private static final int SKIP_ROWS = 1;   // header
+    private static final int SKIP_ROWS = 0;   // header
     private static final int BATCH_SIZE = 500;
     private static final int IDX_ID = 0;
     private static final int IDX_kota_id = 1;
@@ -40,16 +39,6 @@ public class DistrictMigration {
 
         try (BufferedReader br = new BufferedReader(
                 new InputStreamReader(Files.newInputStream(Path.of(FILE_PATH)), StandardCharsets.UTF_8))) {
-
-            String headerLine = br.readLine();
-            if (headerLine == null) throw new IllegalStateException("CSV kosong: " + FILE_PATH);
-
-            Map<String, Integer> colIndex = buildColumnIndexCsv(headerLine);
-
-            // skip tambahan kalau SKIP_ROWS > 1
-            for (int i = 1; i < SKIP_ROWS; i++) {
-                br.readLine();
-            }
 
             String line;
             int rowNumber = SKIP_ROWS;

@@ -17,10 +17,10 @@ public class Village {
     @Id
     private Long id;
 
-    @Column(name = "nama", length = 100)
+    @Column(name = "name", length = 100)
     private String nama;
 
-    @Column(name = "id_kecamatan", length = 100)
+    @Column(name = "kecamatan_id", length = 100)
     private Integer idKecamatan;
 
     @Column(name = "created_at", updatable = false)

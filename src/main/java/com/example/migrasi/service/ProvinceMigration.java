@@ -19,7 +19,7 @@ import java.util.*;
 public class ProvinceMigration {
 
     private static final String FILE_PATH = "data/csv/provinsi.csv";
-    private static final int SKIP_ROWS = 1;   // header
+    private static final int SKIP_ROWS = 0;   // header
     private static final int BATCH_SIZE = 500;
     private static final int IDX_COL_0 = 0;
     private static final int IDX_COL_1 = 1;
@@ -35,16 +35,6 @@ public class ProvinceMigration {
 
         try (BufferedReader br = new BufferedReader(
                 new InputStreamReader(Files.newInputStream(Path.of(FILE_PATH)), StandardCharsets.UTF_8))) {
-
-            String headerLine = br.readLine();
-            if (headerLine == null) throw new IllegalStateException("CSV kosong: " + FILE_PATH);
-
-            Map<String, Integer> colIndex = buildColumnIndexCsv(headerLine);
-
-            // skip tambahan kalau SKIP_ROWS > 1
-            for (int i = 1; i < SKIP_ROWS; i++) {
-                br.readLine();
-            }
 
             String line;
             int rowNumber = SKIP_ROWS;

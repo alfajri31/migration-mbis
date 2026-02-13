@@ -104,7 +104,7 @@ public class CustomerMigration {
                 e.setNamaCustomer(nama);
                 e.setNamaRm(nama_rm);
                 e.setNpwp(npwp);
-                e.setAlamat(alamat);
+                e.setAddress(alamat);
                 e.setFoto(foto);
                 e.setBentukCustomer(jenis_perusahaan.toUpperCase());
                 entities.add(e);

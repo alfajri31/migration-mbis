@@ -17,10 +17,10 @@ public class Regency {
     @Id
     private Integer id;
 
-    @Column(name = "nama", length = 100)
+    @Column(name = "name", length = 100)
     private String nama;
 
-    @Column(name = "id_provinsi", length = 100)
+    @Column(name = "province_id", length = 100)
     private Integer idProvinsi;
 
     @Column(name = "created_at", updatable = false)

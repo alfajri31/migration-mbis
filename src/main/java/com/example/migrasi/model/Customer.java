@@ -7,7 +7,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "mst_customer_draft")
+@Table(name = "mst_customers")
 @Getter
 @Setter
 @Builder
@@ -19,26 +19,23 @@ public class Customer {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "id_user", length = 100)
-    private String idUser;
+    @Column(name = "user_id", length = 100)
+    private UUID idUser;
 
     @Column(length = 100)
     private String cif;
 
-    @Column(name = "id_company_profile", length = 200)
-    private String idCompanyProfile;
-
     @Column(name = "bentuk_customer", length = 100)
     private String bentukCustomer;
 
-    @Column(name = "nama_customer", length = 200)
+    @Column(name = "name_customer", length = 200)
     private String namaCustomer;
 
-    @Column(name = "nama_rm", length = 200)
+    @Column(name = "name_rm", length = 200)
     private String namaRm;
 
-    @Column(length = 200)
-    private String cabang;
+    @Column(name = "branch_id", length = 200)
+    private UUID branchId;
 
     @Column(name = "no_tlp_perusahaan", length = 50)
     private String noTlpPerusahaan;
@@ -47,22 +44,22 @@ public class Customer {
     private String npwp;
 
     @Column(length = 500)
-    private String alamat;
+    private String address;
 
     @Column(length = 200)
     private String foto;
 
-    @Column(name = "id_provinsi")
+    @Column(name = "province_id")
     private Integer idProvinsi;
 
-    @Column(name = "id_kota")
+    @Column(name = "kota_id")
     private Integer idKota;
 
-    @Column(name = "id_kecamatan")
+    @Column(name = "kecamatan_id")
     private Integer idKecamatan;
 
-    @Column(name = "id_kelurahan")
-    private Integer idKelurahan;
+    @Column(name = "kelurahan_id")
+    private Long idKelurahan;
 
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;
