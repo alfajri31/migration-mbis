@@ -114,10 +114,10 @@ public class CustomerMigration {
                 e.setPicName(nama_rm);
                 e.setAddress(alamat);
                 e.setFotoFile(foto);
-                e.setEntityType(bumn_non_bumn.toUpperCase().replaceAll("\\s+", "_").toUpperCase());
+                e.setEntityType(bumn_non_bumn.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_"));
                 e.setCustomerType(statusKerjasama == null || statusKerjasama.isBlank() ? "CORPORATE" : "PERSONAL");
                 e.setNip(username);
-                e.setBranchId(kantor_cabang.trim().toUpperCase().replaceAll("\\s+", "_").toUpperCase());
+                e.setBranchId(kantor_cabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_"));
                 e.setCreatedBy(UUID.fromString("e2aa6450-7fb6-4347-a875-0fc91503b172"));
                 entities.add(e);
             }

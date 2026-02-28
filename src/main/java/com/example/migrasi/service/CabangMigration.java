@@ -85,7 +85,7 @@ public class CabangMigration {
                  ************************************************************************************************************************
                  */
                 Branch e = new Branch();
-                e.setId(kantorCabang.trim().toUpperCase().replaceAll("\\s+", "_").toUpperCase());
+                e.setId(kantorCabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_"));
                 e.setName(kantorCabang);
                 entities.add(e);
             }
