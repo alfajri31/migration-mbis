@@ -6,7 +6,7 @@ import lombok.*;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "mst_province")
+@Table(name = "m_province")
 @Getter
 @Setter
 @Builder

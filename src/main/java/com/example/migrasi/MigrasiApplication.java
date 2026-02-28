@@ -10,7 +10,7 @@ public class MigrasiApplication implements CommandLineRunner {
 
     // 🔥 Bisa isi banyak sekaligus
     private static final String[] MIGRATION_NAMES = {
-            "customer"
+            "cabang"
     };
 
     private final CustomerMigration customerMigration;
@@ -18,17 +18,21 @@ public class MigrasiApplication implements CommandLineRunner {
     private final RegencyMigration regencyMigration;
     private final DistrictMigration districtMigration;
     private final VillagesMigration villagesMigration;
+    private final CabangMigration cabangMigration;
+
 
     public MigrasiApplication(CustomerMigration customerMigration,
                               ProvinceMigration provinceMigration,
                               RegencyMigration regencyMigration,
                               DistrictMigration districtMigration,
-                              VillagesMigration villagesMigration) {
+                              VillagesMigration villagesMigration,
+                              CabangMigration cabangMigration) {
         this.customerMigration = customerMigration;
         this.provinceMigration = provinceMigration;
         this.regencyMigration = regencyMigration;
         this.districtMigration = districtMigration;
         this.villagesMigration = villagesMigration;
+        this.cabangMigration = cabangMigration;
     }
 
     public static void main(String[] args) {
@@ -64,6 +68,11 @@ public class MigrasiApplication implements CommandLineRunner {
                 case "kelurahan" -> {
                     System.out.println("Running district Migration...");
                     villagesMigration.migrate();
+                }
+
+                case "cabang" -> {
+                    System.out.println("Running cabang Migration...");
+                    cabangMigration.migrate();
                 }
 
                 default -> {
