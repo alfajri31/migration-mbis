@@ -1,24 +1,23 @@
 package com.example.migrasi.model;
 
-import com.example.migrasi.model.BaseAuditEntity;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.*;
 
-import java.util.UUID;
-
 @Entity
-@Table(name = "m_branches")
+@Table(name = "m_divisions")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Branch extends BaseAuditEntity {
+public class Division extends BaseAuditEntity {
     @Id
     private String id;
     @Column(name = "code", length = 200)
     private String code;
     @Column(name = "name", length = 200)
     private String name;
-    private String region;
 }

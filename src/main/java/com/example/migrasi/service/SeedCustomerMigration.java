@@ -1,9 +1,7 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.model.Branch;
 import com.example.migrasi.model.Customer;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -23,10 +21,10 @@ import java.util.*;
 
 @Slf4j
 @Service
-public class CustomerMigration {
+public class SeedCustomerMigration {
 
-    private static final String FILE_PATH = "data/xlsx/customer.xlsx";
-    private static final String SHEET_NAME = "Mitra"; // nama tab excel
+    private static final String FILE_PATH = "data/xlsx/seed_customer_dev.xlsx";
+    private static final String SHEET_NAME = "Worksheet"; // nama tab excel
     private static final int SKIP_ROWS = 1;                 // header row
     private static final int BATCH_SIZE = 500;
 
@@ -73,35 +71,23 @@ public class CustomerMigration {
 
                 // Ambil berdasarkan NAMA KOLOM Excel
                 String cif = getValue(row, colIndex, "CIF");
-                String nama = getValue(row, colIndex, "Nama");
-                String statusKerjasama = getValue(row, colIndex, "Status Kerjasama");
-                String leader = getValue(row, colIndex, "Leader");
-                String member = getValue(row, colIndex, "Member");
-                String alamat = getValue(row, colIndex, "Alamat");
-                String bumn_non_bumn = getValue(row, colIndex, "BUMN / Non BUMN");
-                String kategori = getValue(row, colIndex, "Kategori");
-                String jenis_perusahaan = getValue(row, colIndex, "Jenis Perusahaan");
-                String jenis_usaha = getValue(row, colIndex, "Jenis Usaha");
-                String npwp = getValue(row, colIndex, "NPWP");
-                String nama_customer = getValue(row, colIndex, "Nama Customer");
-                String jabatan_customer = getValue(row, colIndex, "Jabatan Customer");
-                String hp = getValue(row, colIndex, "HP");
-                String email = getValue(row, colIndex, "Email");
-                String foto = getValue(row, colIndex, "Foto");
-                String sumber_bisnis = getValue(row, colIndex, "Sumber Bisnis");
-                String nama_agen = getValue(row, colIndex, "Nama Agen");
-                String nama_broker = getValue(row, colIndex, "Nama Broker");
-                String divisi = getValue(row, colIndex, "Divisi");
-                String kanwil = getValue(row, colIndex, "Kanwil");
-                String kantor_cabang = getValue(row, colIndex, "Kantor Cabang");
-                String username = getValue(row, colIndex, "Username");
-                String nama_rm = getValue(row, colIndex, "Nama RM");
-                String broker_lokal_broker_luar_daerah = getValue(row, colIndex, "Broker Lokal/Broker Luar Daerah");
-                String bisnis_lokal_bisnis_luar_daerah = getValue(row, colIndex, "Bisnis Lokal/Bisnis Luar Daerah");
-                String generator = getValue(row, colIndex, "Generator");
+                String customerType = getValue(row, colIndex, "customer_type");
+                String entityType = getValue(row, colIndex, "entity_type");
+                String companyName = getValue(row, colIndex, "company_name");
+                String npwp = getValue(row, colIndex, "npwp");
+                String npwpNormalized = getValue(row, colIndex, "npwp_normalized");
+                String phone = getValue(row, colIndex, "phone");
+                String phoneNormalized = getValue(row, colIndex, "phone_normalized");
+                String email= getValue(row, colIndex, "email");
+                String picName= getValue(row, colIndex, "pic_name");
+                String address = getValue(row, colIndex, "address");
+                String nip = getValue(row, colIndex, "nip");
+                boolean isFixed = Boolean.parseBoolean(
+                        String.valueOf(getValue(row, colIndex, "is_fixed_assignment"))
+                );
 
                 //id unique key di excel, id null then skip
-                if (cif == null || cif.isBlank() || jenis_perusahaan == null || jenis_perusahaan.isBlank() || kantor_cabang == null || bumn_non_bumn == null) {
+                if (nip == null || nip.isBlank()) {
                     log.warn("Skip row {}: CIF kosong", rowNumber);
                     continue;
                 }
@@ -111,22 +97,17 @@ public class CustomerMigration {
 */
                 Customer e = new Customer();
                 e.setCif(cif.replaceAll("\\s+", ""));
-                e.setCompanyName(nama);
-                e.setPicName(nama_rm);
-                e.setAddress(alamat);
-                e.setFotoFile(foto);
-                e.setEntityType(bumn_non_bumn.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_"));
-                e.setCustomerType(statusKerjasama);
-                e.setNip(username);
-                String kantorCabang = kantor_cabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_");
-                String existingId = entityManager.createQuery(
-                                "select c.id from Branch c where c.code = :code", String.class)
-                        .setParameter("code", kantorCabang)
-                        .setMaxResults(1)
-                        .getResultStream()
-                        .findFirst()
-                        .orElse(null);
-                e.setBranchId(existingId);
+                e.setCustomerType(customerType);
+                e.setEntityType(entityType);
+                e.setAddress(address);
+                e.setNip(nip);
+                e.setBranchId("00");
+                e.setCompanyName(companyName);
+                e.setNpwpNormalized(npwpNormalized);
+                e.setEmail(email);
+                e.setPicName(picName);
+                e.setPhoneNormalized(phoneNormalized);
+                e.setFixedAssignment(isFixed);
                 e.setCreatedBy(UUID.fromString("e2aa6450-7fb6-4347-a875-0fc91503b172"));
                 entities.add(e);
             }

@@ -1,9 +1,7 @@
 package com.example.migrasi.service;
 
 import com.example.migrasi.model.Branch;
-import com.example.migrasi.model.Customer;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -25,8 +23,8 @@ import java.util.*;
 @Service
 public class CabangMigration {
 
-    private static final String FILE_PATH = "data/xlsx/customer.xlsx";
-    private static final String SHEET_NAME = "KC"; // nama tab excel
+    private static final String FILE_PATH = "data/xlsx/cabang.xlsx";
+    private static final String SHEET_NAME = "Worksheet"; // nama tab excel
     private static final int SKIP_ROWS = 1;                 // header row
     private static final int BATCH_SIZE = 500;
 
@@ -72,11 +70,15 @@ public class CabangMigration {
                 rowNumber++;
 
                 // Ambil berdasarkan NAMA KOLOM Excel
-                String kantorCabang = getValue(row, colIndex, "Kantor Cabang");
-                String kanwil = getValue(row, colIndex, "kanwil");
+                String idCabang = getValue(row, colIndex, "id_cabang");
+                String rawNamaCabang = getValue(row, colIndex, "nama_cabang");
+                String namaCabang = Objects.requireNonNull(rawNamaCabang)
+                        .replace("Kantor Cabang", "")
+                        .trim();
+                String codeCabang = namaCabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_");
 
                 //id null then skip
-                if (kantorCabang == null || kantorCabang.isBlank() || kanwil == null || kanwil.isBlank()) {
+                if (idCabang == null || idCabang.isBlank()) {
                     log.warn("Skip row {}: kantor cabang kosong", rowNumber);
                     continue;
                 }
@@ -85,8 +87,10 @@ public class CabangMigration {
                  ************************************************************************************************************************
                  */
                 Branch e = new Branch();
-                e.setId(kantorCabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_"));
-                e.setName(kantorCabang);
+//                e.setId(kantorCabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_"));
+                e.setId(idCabang);
+                e.setName(namaCabang);
+                e.setCode(codeCabang);
                 entities.add(e);
             }
 

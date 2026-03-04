@@ -10,15 +10,18 @@ public class MigrasiApplication implements CommandLineRunner {
 
     // 🔥 Bisa isi banyak sekaligus
     private static final String[] MIGRATION_NAMES = {
-            "cabang"
+            "divisi","cabang","kanwil","customer","seed-customer"
     };
 
+    private final SeedCustomerMigration seedCustomerMigration;
     private final CustomerMigration customerMigration;
     private final ProvinceMigration provinceMigration;
     private final RegencyMigration regencyMigration;
     private final DistrictMigration districtMigration;
     private final VillagesMigration villagesMigration;
     private final CabangMigration cabangMigration;
+    private final DivisiMigration divisionMigration;
+    private final KanwilMigration kanwilMigration;
 
 
     public MigrasiApplication(CustomerMigration customerMigration,
@@ -26,13 +29,19 @@ public class MigrasiApplication implements CommandLineRunner {
                               RegencyMigration regencyMigration,
                               DistrictMigration districtMigration,
                               VillagesMigration villagesMigration,
-                              CabangMigration cabangMigration) {
+                              CabangMigration cabangMigration,
+                              DivisiMigration divisionMigration,
+                              KanwilMigration kanwilMigration,
+                              SeedCustomerMigration seedCustomerMigration) {
         this.customerMigration = customerMigration;
         this.provinceMigration = provinceMigration;
         this.regencyMigration = regencyMigration;
         this.districtMigration = districtMigration;
         this.villagesMigration = villagesMigration;
         this.cabangMigration = cabangMigration;
+        this.divisionMigration = divisionMigration;
+        this.kanwilMigration = kanwilMigration;
+        this.seedCustomerMigration = seedCustomerMigration;
     }
 
     public static void main(String[] args) {
@@ -73,6 +82,21 @@ public class MigrasiApplication implements CommandLineRunner {
                 case "cabang" -> {
                     System.out.println("Running cabang Migration...");
                     cabangMigration.migrate();
+                }
+
+                case "divisi" -> {
+                    System.out.println("Running division Migration...");
+                    divisionMigration.migrate();
+                }
+
+                case "kanwil" -> {
+                    System.out.println("Running kanwil Migration...");
+                    kanwilMigration.migrate();
+                }
+
+                case "seed-customer" -> {
+                    System.out.println("Running Seed Customer Migration...");
+                    seedCustomerMigration.migrate();
                 }
 
                 default -> {

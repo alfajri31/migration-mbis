@@ -1,9 +1,7 @@
 package com.example.migrasi.service;
 
 import com.example.migrasi.model.Branch;
-import com.example.migrasi.model.Customer;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -23,10 +21,10 @@ import java.util.*;
 
 @Slf4j
 @Service
-public class CustomerMigration {
+public class KanwilMigration {
 
     private static final String FILE_PATH = "data/xlsx/customer.xlsx";
-    private static final String SHEET_NAME = "Mitra"; // nama tab excel
+    private static final String SHEET_NAME = "KC"; // nama tab excel
     private static final int SKIP_ROWS = 1;                 // header row
     private static final int BATCH_SIZE = 500;
 
@@ -40,7 +38,7 @@ public class CustomerMigration {
     public void migrate() {
         log.info("Running migration from sheet: {}", SHEET_NAME);
 
-        List<Customer> entities = new ArrayList<>();
+        List<Branch> entities = new ArrayList<>();
 
         try (InputStream is = Files.newInputStream(Path.of(FILE_PATH));
              Workbook workbook = new XSSFWorkbook(is)) {
@@ -72,62 +70,22 @@ public class CustomerMigration {
                 rowNumber++;
 
                 // Ambil berdasarkan NAMA KOLOM Excel
-                String cif = getValue(row, colIndex, "CIF");
-                String nama = getValue(row, colIndex, "Nama");
-                String statusKerjasama = getValue(row, colIndex, "Status Kerjasama");
-                String leader = getValue(row, colIndex, "Leader");
-                String member = getValue(row, colIndex, "Member");
-                String alamat = getValue(row, colIndex, "Alamat");
-                String bumn_non_bumn = getValue(row, colIndex, "BUMN / Non BUMN");
-                String kategori = getValue(row, colIndex, "Kategori");
-                String jenis_perusahaan = getValue(row, colIndex, "Jenis Perusahaan");
-                String jenis_usaha = getValue(row, colIndex, "Jenis Usaha");
-                String npwp = getValue(row, colIndex, "NPWP");
-                String nama_customer = getValue(row, colIndex, "Nama Customer");
-                String jabatan_customer = getValue(row, colIndex, "Jabatan Customer");
-                String hp = getValue(row, colIndex, "HP");
-                String email = getValue(row, colIndex, "Email");
-                String foto = getValue(row, colIndex, "Foto");
-                String sumber_bisnis = getValue(row, colIndex, "Sumber Bisnis");
-                String nama_agen = getValue(row, colIndex, "Nama Agen");
-                String nama_broker = getValue(row, colIndex, "Nama Broker");
-                String divisi = getValue(row, colIndex, "Divisi");
-                String kanwil = getValue(row, colIndex, "Kanwil");
-                String kantor_cabang = getValue(row, colIndex, "Kantor Cabang");
-                String username = getValue(row, colIndex, "Username");
-                String nama_rm = getValue(row, colIndex, "Nama RM");
-                String broker_lokal_broker_luar_daerah = getValue(row, colIndex, "Broker Lokal/Broker Luar Daerah");
-                String bisnis_lokal_bisnis_luar_daerah = getValue(row, colIndex, "Bisnis Lokal/Bisnis Luar Daerah");
-                String generator = getValue(row, colIndex, "Generator");
-
-                //id unique key di excel, id null then skip
-                if (cif == null || cif.isBlank() || jenis_perusahaan == null || jenis_perusahaan.isBlank() || kantor_cabang == null || bumn_non_bumn == null) {
-                    log.warn("Skip row {}: CIF kosong", rowNumber);
+                String kantorCabang = getValue(row, colIndex, "Kantor Cabang");
+                String kantorWil = getValue(row, colIndex, "Kanwil");
+                //id null then skip
+                if (kantorCabang == null || kantorCabang.isBlank()) {
+                    log.warn("Skip row {}: kantor cabang kosong", rowNumber);
                     continue;
                 }
+                String codeCabang = kantorCabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_");
 
                 /*
-************************************************************************************************************************
-*/
-                Customer e = new Customer();
-                e.setCif(cif.replaceAll("\\s+", ""));
-                e.setCompanyName(nama);
-                e.setPicName(nama_rm);
-                e.setAddress(alamat);
-                e.setFotoFile(foto);
-                e.setEntityType(bumn_non_bumn.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_"));
-                e.setCustomerType(statusKerjasama);
-                e.setNip(username);
-                String kantorCabang = kantor_cabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_");
-                String existingId = entityManager.createQuery(
-                                "select c.id from Branch c where c.code = :code", String.class)
-                        .setParameter("code", kantorCabang)
-                        .setMaxResults(1)
-                        .getResultStream()
-                        .findFirst()
-                        .orElse(null);
-                e.setBranchId(existingId);
-                e.setCreatedBy(UUID.fromString("e2aa6450-7fb6-4347-a875-0fc91503b172"));
+                 ************************************************************************************************************************
+                 */
+                Branch e = new Branch();
+                e.setRegion(kantorWil);
+                e.setCode(codeCabang);
+                e.setName(kantorCabang);
                 entities.add(e);
             }
 
@@ -143,28 +101,27 @@ public class CustomerMigration {
         log.info("Migration selesai.");
     }
 
-    public void bulkUpsert(List<Customer> entities) {
+    public void bulkUpsert(List<Branch> entities) {
         if (entities == null || entities.isEmpty()) return;
 
         int processed = 0;
 
-        for (Customer e : entities) {
+        for (Branch e : entities) {
             DefaultTransactionDefinition def = new DefaultTransactionDefinition();
             def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
             TransactionStatus status = txManager.getTransaction(def); // BEGIN
 
             try {
-                //id unique key di database sendiri, id null then skip
-                if (e.getCif() == null || e.getCif().isBlank()) {
+                if (e.getCode() == null || e.getCode().isBlank()) {
                     log.warn("Skip: cif kosong");
                     txManager.commit(status); // commit kosong biar rapih
                     continue;
                 }
 
-                UUID existingId = entityManager.createQuery(
-                                "select c.id from Customer c where c.cif = :cif", UUID.class)
-                        .setParameter("cif", e.getCif())
+                String existingId = entityManager.createQuery(
+                                "select c.id from Branch c where c.code = :code", String.class)
+                        .setParameter("code", e.getCode())
                         .setMaxResults(1)
                         .getResultStream()
                         .findFirst()
@@ -172,6 +129,9 @@ public class CustomerMigration {
 
                 if (existingId != null) {
                     e.setId(existingId);
+                    e.setRegion(e.getRegion());
+                    e.setCode(e.getCode());
+                    e.setName(e.getName());
                     entityManager.merge(e);
                 } else {
                     entityManager.persist(e);
@@ -186,7 +146,7 @@ public class CustomerMigration {
             } catch (Exception ex) {
                 txManager.rollback(status); // ROLLBACK ❌ (cuma item ini)
                 entityManager.clear();      // bersihin persistence context
-                log.warn("Skip error cif {} : {}", e.getCif(), ex.getMessage());
+                log.warn("Skip error name {} : {}", e.getName(), ex.getMessage());
             }
         }
 
