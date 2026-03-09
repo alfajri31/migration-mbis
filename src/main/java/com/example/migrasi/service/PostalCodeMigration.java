@@ -1,7 +1,6 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.model.District;
-import com.example.migrasi.model.Regency;
+import com.example.migrasi.model.PostalCode;
 import com.example.migrasi.model.Village;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -21,23 +20,26 @@ import java.util.Map;
 
 @Slf4j
 @Service
-public class VillagesMigration {
+public class PostalCodeMigration {
 
-    private static final String FILE_PATH = "data/csv/kelurahan.csv";
+    private static final String FILE_PATH = "data/csv/kode_pos.csv";
     private static final int SKIP_ROWS = 0;   // header
     private static final int BATCH_SIZE = 500;
     private static final int IDX_ID = 0;
-    private static final int IDX_kelurahan_name = 1;
+    private static final int IDX_kelurahan_id = 1;
     private static final int IDX_kecamatan_id = 2;
+    private static final int IDX_kota_id = 3;
+    private static final int IDX_provinsi_id = 4;
+    private static final int IDX_postal_id = 5;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     @Transactional
     public void migrate() {
-        log.info("Running province migration from CSV: {}", FILE_PATH);
+        log.info("Running kode pos migration from CSV: {}", FILE_PATH);
 
-        List<Village> entities = new ArrayList<>();
+        List<PostalCode> entities = new ArrayList<>();
 
         try (BufferedReader br = new BufferedReader(
                 new InputStreamReader(Files.newInputStream(Path.of(FILE_PATH)), StandardCharsets.UTF_8))) {
@@ -53,18 +55,24 @@ public class VillagesMigration {
                 String[] cols = splitCsvSimple(line);
 
                 String idStr = getByIndex(cols, IDX_ID);
+                String idKelurahan  = getByIndex(cols, IDX_kelurahan_id);
                 String idKecamatan  = getByIndex(cols, IDX_kecamatan_id);
-                String name  = getByIndex(cols, IDX_kelurahan_name);
+                String idKota  = getByIndex(cols, IDX_kota_id);
+                String idprovinsi  = getByIndex(cols, IDX_provinsi_id);
+                String idpostalCode  = getByIndex(cols, IDX_postal_id);
 
                 if (idStr == null || idStr.isBlank()) {
                     log.warn("Skip row {}: id kosong", rowNumber);
                     continue;
                 }
 
-                Village p = new Village();
+                PostalCode p = new PostalCode();
                 p.setId(Long.parseLong(idStr));
-                p.setIdKecamatan(Integer.parseInt(idKecamatan));
-                p.setNama(name);
+                p.setSubdistrictId(Long.parseLong(idKelurahan));
+                p.setDistrictId(Integer.parseInt(idKecamatan));
+                p.setCityId(Integer.parseInt(idKota));
+                p.setProvId(Integer.parseInt(idprovinsi));
+                p.setPostalCode(Integer.parseInt(idpostalCode));
                 entities.add(p);
             }
 
@@ -81,20 +89,20 @@ public class VillagesMigration {
     }
 
     @jakarta.transaction.Transactional
-    public void bulkUpsert(List<Village> entities) {
+    public void bulkUpsert(List<PostalCode> entities) {
         try {
             if (entities == null || entities.isEmpty()) return;
 
             int processed = 0;
 
-            for (Village e : entities) {
+            for (PostalCode e : entities) {
                 if (e.getId() == null) {
                     log.warn("Skip: cif kosong");
                     continue;
                 }
 
                 Long existingId = entityManager.createQuery(
-                                "select c.id from Village c where c.id = :id", Long.class)
+                                "select c.id from PostalCode c where c.id = :id", Long.class)
                         .setParameter("id", e.getId())
                         .setMaxResults(1)
                         .getResultStream()

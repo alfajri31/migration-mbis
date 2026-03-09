@@ -25,8 +25,9 @@ public class DistrictMigration {
     private static final int SKIP_ROWS = 0;   // header
     private static final int BATCH_SIZE = 500;
     private static final int IDX_ID = 0;
-    private static final int IDX_kota_id = 1;
-    private static final int IDX_kecamatan_name = 2;
+    private static final int IDX_kecamatan_name = 1;
+    private static final int IDX_kota_id = 2;
+
 
     @PersistenceContext
     private EntityManager entityManager;

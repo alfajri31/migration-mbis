@@ -10,7 +10,8 @@ public class MigrasiApplication implements CommandLineRunner {
 
     // 🔥 Bisa isi banyak sekaligus
     private static final String[] MIGRATION_NAMES = {
-            "divisi","cabang","kanwil","customer","seed-customer"
+            "provinsi","kota","kecamatan","kelurahan","kodepos","customer","customer-seed"
+
     };
 
     private final SeedCustomerMigration seedCustomerMigration;
@@ -22,6 +23,7 @@ public class MigrasiApplication implements CommandLineRunner {
     private final CabangMigration cabangMigration;
     private final DivisiMigration divisionMigration;
     private final KanwilMigration kanwilMigration;
+    private final PostalCodeMigration postalCodeMigration;
 
 
     public MigrasiApplication(CustomerMigration customerMigration,
@@ -32,7 +34,8 @@ public class MigrasiApplication implements CommandLineRunner {
                               CabangMigration cabangMigration,
                               DivisiMigration divisionMigration,
                               KanwilMigration kanwilMigration,
-                              SeedCustomerMigration seedCustomerMigration) {
+                              SeedCustomerMigration seedCustomerMigration,
+                              PostalCodeMigration postalCodeMigration) {
         this.customerMigration = customerMigration;
         this.provinceMigration = provinceMigration;
         this.regencyMigration = regencyMigration;
@@ -42,6 +45,7 @@ public class MigrasiApplication implements CommandLineRunner {
         this.divisionMigration = divisionMigration;
         this.kanwilMigration = kanwilMigration;
         this.seedCustomerMigration = seedCustomerMigration;
+        this.postalCodeMigration = postalCodeMigration;
     }
 
     public static void main(String[] args) {
@@ -77,6 +81,11 @@ public class MigrasiApplication implements CommandLineRunner {
                 case "kelurahan" -> {
                     System.out.println("Running district Migration...");
                     villagesMigration.migrate();
+                }
+
+                case "kodepos" -> {
+                    System.out.println("Running Seed kode pos Migration...");
+                    postalCodeMigration.migrate();
                 }
 
                 case "cabang" -> {
