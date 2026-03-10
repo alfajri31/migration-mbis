@@ -77,6 +77,7 @@ public class CustomerMigration {
                 String statusKerjasama = getValue(row, colIndex, "Status Kerjasama");
                 String leader = getValue(row, colIndex, "Leader");
                 String member = getValue(row, colIndex, "Member");
+                String hp = getValue(row, colIndex, "HP");
                 String alamat = getValue(row, colIndex, "Alamat");
                 String bumn_non_bumn = getValue(row, colIndex, "BUMN / Non BUMN");
                 String kategori = getValue(row, colIndex, "Kategori");
@@ -85,7 +86,6 @@ public class CustomerMigration {
                 String npwp = getValue(row, colIndex, "NPWP");
                 String nama_customer = getValue(row, colIndex, "Nama Customer");
                 String jabatan_customer = getValue(row, colIndex, "Jabatan Customer");
-                String hp = getValue(row, colIndex, "HP");
                 String email = getValue(row, colIndex, "Email");
                 String foto = getValue(row, colIndex, "Foto");
                 String sumber_bisnis = getValue(row, colIndex, "Sumber Bisnis");
@@ -118,6 +118,13 @@ public class CustomerMigration {
                 e.setEntityType(bumn_non_bumn.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_"));
                 e.setCustomerType(statusKerjasama);
                 e.setNip(username);
+                e.setEmail(email);
+                e.setPicPhone(normalizePhone(hp));
+                e.setPhoneNormalized(normalizePhone(hp));
+                if((npwp != null ? npwp.length() : 0) > 8) {
+                    e.setNpwp(npwp);
+                    e.setNpwpNormalized(normalizeNpwp(npwp));
+                }
                 String kantorCabang = kantor_cabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_");
                 String existingId = entityManager.createQuery(
                                 "select c.id from Branch c where c.code = :code", String.class)
@@ -248,5 +255,37 @@ public class CustomerMigration {
         if (s == null) return null;
         String t = s.trim();
         return t.isEmpty() ? null : t;
+    }
+
+    public String normalizePhone(String hp) {
+        if (hp == null || hp.isEmpty()) {
+            return hp;
+        }
+
+        hp = hp.trim();
+
+        // hilangkan tanda "-"
+        hp = hp.replace("-", "");
+
+        if (hp.startsWith("08")) {
+            hp = "62" + hp.substring(1);
+        } else {
+            hp = "";
+        }
+
+        return hp;
+    }
+
+    public String normalizeNpwp(String npwp) {
+        if (npwp == null || npwp.isEmpty()) {
+            return npwp;
+        }
+
+        npwp = npwp.trim();
+
+        // hapus semua karakter selain angka
+        npwp = npwp.replaceAll("[^0-9]", "");
+
+        return npwp;
     }
 }
