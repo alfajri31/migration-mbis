@@ -1,9 +1,8 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.model.Branch;
 import com.example.migrasi.model.Customer;
+import com.example.migrasi.util.Normalizing;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +19,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+
+import static com.example.migrasi.util.MyExcelDoc.*;
 
 @Slf4j
 @Service
@@ -72,33 +73,33 @@ public class CustomerMigration {
                 rowNumber++;
 
                 // Ambil berdasarkan NAMA KOLOM Excel
-                String cif = getValue(row, colIndex, "CIF");
-                String nama = getValue(row, colIndex, "Nama");
-                String statusKerjasama = getValue(row, colIndex, "Status Kerjasama");
-                String leader = getValue(row, colIndex, "Leader");
-                String member = getValue(row, colIndex, "Member");
-                String hp = getValue(row, colIndex, "HP");
-                String alamat = getValue(row, colIndex, "Alamat");
-                String bumn_non_bumn = getValue(row, colIndex, "BUMN / Non BUMN");
-                String kategori = getValue(row, colIndex, "Kategori");
-                String jenis_perusahaan = getValue(row, colIndex, "Jenis Perusahaan");
-                String jenis_usaha = getValue(row, colIndex, "Jenis Usaha");
-                String npwp = getValue(row, colIndex, "NPWP");
-                String nama_customer = getValue(row, colIndex, "Nama Customer");
-                String jabatan_customer = getValue(row, colIndex, "Jabatan Customer");
-                String email = getValue(row, colIndex, "Email");
-                String foto = getValue(row, colIndex, "Foto");
-                String sumber_bisnis = getValue(row, colIndex, "Sumber Bisnis");
-                String nama_agen = getValue(row, colIndex, "Nama Agen");
-                String nama_broker = getValue(row, colIndex, "Nama Broker");
-                String divisi = getValue(row, colIndex, "Divisi");
-                String kanwil = getValue(row, colIndex, "Kanwil");
-                String kantor_cabang = getValue(row, colIndex, "Kantor Cabang");
-                String username = getValue(row, colIndex, "Username");
-                String nama_rm = getValue(row, colIndex, "Nama RM");
-                String broker_lokal_broker_luar_daerah = getValue(row, colIndex, "Broker Lokal/Broker Luar Daerah");
-                String bisnis_lokal_bisnis_luar_daerah = getValue(row, colIndex, "Bisnis Lokal/Bisnis Luar Daerah");
-                String generator = getValue(row, colIndex, "Generator");
+                String cif = getValueExcel(row, colIndex, "CIF");
+                String nama = getValueExcel(row, colIndex, "Nama");
+                String statusKerjasama = getValueExcel(row, colIndex, "Status Kerjasama");
+                String leader = getValueExcel(row, colIndex, "Leader");
+                String member = getValueExcel(row, colIndex, "Member");
+                String hp = getValueExcel(row, colIndex, "HP");
+                String alamat = getValueExcel(row, colIndex, "Alamat");
+                String bumn_non_bumn = getValueExcel(row, colIndex, "BUMN / Non BUMN");
+                String kategori = getValueExcel(row, colIndex, "Kategori");
+                String jenis_perusahaan = getValueExcel(row, colIndex, "Jenis Perusahaan");
+                String jenis_usaha = getValueExcel(row, colIndex, "Jenis Usaha");
+                String npwp = getValueExcel(row, colIndex, "NPWP");
+                String nama_customer = getValueExcel(row, colIndex, "Nama Customer");
+                String jabatan_customer = getValueExcel(row, colIndex, "Jabatan Customer");
+                String email = getValueExcel(row, colIndex, "Email");
+                String foto = getValueExcel(row, colIndex, "Foto");
+                String sumber_bisnis = getValueExcel(row, colIndex, "Sumber Bisnis");
+                String nama_agen = getValueExcel(row, colIndex, "Nama Agen");
+                String nama_broker = getValueExcel(row, colIndex, "Nama Broker");
+                String divisi = getValueExcel(row, colIndex, "Divisi");
+                String kanwil = getValueExcel(row, colIndex, "Kanwil");
+                String kantor_cabang = getValueExcel(row, colIndex, "Kantor Cabang");
+                String username = getValueExcel(row, colIndex, "Username");
+                String nama_rm = getValueExcel(row, colIndex, "Nama RM");
+                String broker_lokal_broker_luar_daerah = getValueExcel(row, colIndex, "Broker Lokal/Broker Luar Daerah");
+                String bisnis_lokal_bisnis_luar_daerah = getValueExcel(row, colIndex, "Bisnis Lokal/Bisnis Luar Daerah");
+                String generator = getValueExcel(row, colIndex, "Generator");
 
                 //id unique key di excel, id null then skip
                 if (cif == null || cif.isBlank() || jenis_perusahaan == null || jenis_perusahaan.isBlank() || kantor_cabang == null || bumn_non_bumn == null) {
@@ -119,11 +120,11 @@ public class CustomerMigration {
                 e.setCustomerType(statusKerjasama);
                 e.setNip(username);
                 e.setEmail(email);
-                e.setPicPhone(normalizePhone(hp));
-                e.setPhoneNormalized(normalizePhone(hp));
+                e.setPicPhone(Normalizing.normalizePhone(hp));
+                e.setPhoneNormalized(Normalizing.normalizePhone(hp));
                 if((npwp != null ? npwp.length() : 0) > 8) {
                     e.setNpwp(npwp);
-                    e.setNpwpNormalized(normalizeNpwp(npwp));
+                    e.setNpwpNormalized(Normalizing.normalizeNpwp(npwp));
                 }
                 String kantorCabang = kantor_cabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_");
                 String existingId = entityManager.createQuery(
@@ -151,6 +152,7 @@ public class CustomerMigration {
     }
 
     public void bulkUpsert(List<Customer> entities) {
+
         if (entities == null || entities.isEmpty()) return;
 
         int processed = 0;
@@ -200,92 +202,4 @@ public class CustomerMigration {
         log.info("Total processed: {}", processed);
     }
 
-
-
-    private Map<String, Integer> buildColumnIndex(Row headerRow) {
-        Map<String, Integer> map = new HashMap<>();
-        for (Cell cell : headerRow) {
-            if (cell == null) continue;
-
-            String name = cell.getStringCellValue();
-            if (name == null) continue;
-
-            String key = name.trim().toUpperCase();
-            if (!key.isEmpty()) {
-                map.put(key, cell.getColumnIndex());
-            }
-        }
-        log.info("Detected columns: {}", map.keySet());
-        return map;
-    }
-
-    private String getValue(Row row, Map<String, Integer> colIndex, String columnName) {
-        Integer idx = colIndex.get(columnName.trim().toUpperCase());
-        if (idx == null) return null;
-
-        Cell cell = row.getCell(idx);
-        if (cell == null) return null;
-
-        return switch (cell.getCellType()) {
-            case STRING -> trimToNull(cell.getStringCellValue());
-            case NUMERIC -> {
-                if (DateUtil.isCellDateFormatted(cell)) {
-                    yield cell.getLocalDateTimeCellValue().toString();
-                }
-                double v = cell.getNumericCellValue();
-                long lv = (long) v;
-                yield (v == lv) ? String.valueOf(lv) : String.valueOf(v);
-            }
-            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
-            case FORMULA -> switch (cell.getCachedFormulaResultType()) {
-                case STRING -> trimToNull(cell.getStringCellValue());
-                case NUMERIC -> {
-                    double v = cell.getNumericCellValue();
-                    long lv = (long) v;
-                    yield (v == lv) ? String.valueOf(lv) : String.valueOf(v);
-                }
-                case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
-                default -> null;
-            };
-            case BLANK, _NONE, ERROR -> null;
-        };
-    }
-
-    private String trimToNull(String s) {
-        if (s == null) return null;
-        String t = s.trim();
-        return t.isEmpty() ? null : t;
-    }
-
-    public String normalizePhone(String hp) {
-        if (hp == null || hp.isEmpty()) {
-            return hp;
-        }
-
-        hp = hp.trim();
-
-        // hilangkan tanda "-"
-        hp = hp.replace("-", "");
-
-        if (hp.startsWith("08")) {
-            hp = "62" + hp.substring(1);
-        } else {
-            hp = "";
-        }
-
-        return hp;
-    }
-
-    public String normalizeNpwp(String npwp) {
-        if (npwp == null || npwp.isEmpty()) {
-            return npwp;
-        }
-
-        npwp = npwp.trim();
-
-        // hapus semua karakter selain angka
-        npwp = npwp.replaceAll("[^0-9]", "");
-
-        return npwp;
-    }
 }

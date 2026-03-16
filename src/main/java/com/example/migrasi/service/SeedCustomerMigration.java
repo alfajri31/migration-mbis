@@ -1,6 +1,7 @@
 package com.example.migrasi.service;
 
 import com.example.migrasi.model.Customer;
+import com.example.migrasi.util.RowSkipUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
@@ -18,6 +19,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+
+import static com.example.migrasi.util.MyExcelDoc.*;
 
 @Slf4j
 @Service
@@ -70,25 +73,24 @@ public class SeedCustomerMigration {
                 rowNumber++;
 
                 // Ambil berdasarkan NAMA KOLOM Excel
-                String cif = getValue(row, colIndex, "CIF");
-                String customerType = getValue(row, colIndex, "customer_type");
-                String entityType = getValue(row, colIndex, "entity_type");
-                String companyName = getValue(row, colIndex, "company_name");
-                String npwp = getValue(row, colIndex, "npwp");
-                String npwpNormalized = getValue(row, colIndex, "npwp_normalized");
-                String phone = getValue(row, colIndex, "phone");
-                String phoneNormalized = getValue(row, colIndex, "phone_normalized");
-                String email= getValue(row, colIndex, "email");
-                String picName= getValue(row, colIndex, "pic_name");
-                String address = getValue(row, colIndex, "address");
-                String nip = getValue(row, colIndex, "nip");
+                String cif = getValueExcel(row, colIndex, "CIF");
+                String customerType = getValueExcel(row, colIndex, "customer_type");
+                String entityType = getValueExcel(row, colIndex, "entity_type");
+                String companyName = getValueExcel(row, colIndex, "company_name");
+                String npwp = getValueExcel(row, colIndex, "npwp");
+                String npwpNormalized = getValueExcel(row, colIndex, "npwp_normalized");
+                String phone = getValueExcel(row, colIndex, "phone");
+                String phoneNormalized = getValueExcel(row, colIndex, "phone_normalized");
+                String email= getValueExcel(row, colIndex, "email");
+                String picName= getValueExcel(row, colIndex, "pic_name");
+                String address = getValueExcel(row, colIndex, "address");
+                String nip = getValueExcel(row, colIndex, "nip");
                 boolean isFixed = Boolean.parseBoolean(
-                        String.valueOf(getValue(row, colIndex, "is_fixed_assignment"))
+                        String.valueOf(getValueExcel(row, colIndex, "is_fixed_assignment"))
                 );
 
-                //id unique key di excel, id null then skip
-                if (nip == null || nip.isBlank()) {
-                    log.warn("Skip row {}: CIF kosong", rowNumber);
+                //id null then skip
+                if (RowSkipUtil.skipIdField(rowNumber, nip)) {
                     continue;
                 }
 
@@ -174,60 +176,4 @@ public class SeedCustomerMigration {
         log.info("Total processed: {}", processed);
     }
 
-
-
-    private Map<String, Integer> buildColumnIndex(Row headerRow) {
-        Map<String, Integer> map = new HashMap<>();
-        for (Cell cell : headerRow) {
-            if (cell == null) continue;
-
-            String name = cell.getStringCellValue();
-            if (name == null) continue;
-
-            String key = name.trim().toUpperCase();
-            if (!key.isEmpty()) {
-                map.put(key, cell.getColumnIndex());
-            }
-        }
-        log.info("Detected columns: {}", map.keySet());
-        return map;
-    }
-
-    private String getValue(Row row, Map<String, Integer> colIndex, String columnName) {
-        Integer idx = colIndex.get(columnName.trim().toUpperCase());
-        if (idx == null) return null;
-
-        Cell cell = row.getCell(idx);
-        if (cell == null) return null;
-
-        return switch (cell.getCellType()) {
-            case STRING -> trimToNull(cell.getStringCellValue());
-            case NUMERIC -> {
-                if (DateUtil.isCellDateFormatted(cell)) {
-                    yield cell.getLocalDateTimeCellValue().toString();
-                }
-                double v = cell.getNumericCellValue();
-                long lv = (long) v;
-                yield (v == lv) ? String.valueOf(lv) : String.valueOf(v);
-            }
-            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
-            case FORMULA -> switch (cell.getCachedFormulaResultType()) {
-                case STRING -> trimToNull(cell.getStringCellValue());
-                case NUMERIC -> {
-                    double v = cell.getNumericCellValue();
-                    long lv = (long) v;
-                    yield (v == lv) ? String.valueOf(lv) : String.valueOf(v);
-                }
-                case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
-                default -> null;
-            };
-            case BLANK, _NONE, ERROR -> null;
-        };
-    }
-
-    private String trimToNull(String s) {
-        if (s == null) return null;
-        String t = s.trim();
-        return t.isEmpty() ? null : t;
-    }
 }

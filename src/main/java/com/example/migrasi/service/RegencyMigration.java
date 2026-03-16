@@ -2,6 +2,8 @@ package com.example.migrasi.service;
 
 import com.example.migrasi.model.Province;
 import com.example.migrasi.model.Regency;
+import com.example.migrasi.util.MyExcelDoc;
+import com.example.migrasi.util.RowSkipUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
@@ -51,14 +53,15 @@ public class RegencyMigration {
 
                 String[] cols = splitCsvSimple(line);
 
-                String idStr = getByIndex(cols, IDX_ID);
-                String idProvinsi  = getByIndex(cols, IDX_province_id);
-                String name  = getByIndex(cols, IDX_kota_name);
+                String idStr = MyExcelDoc.getValueCsv(cols, IDX_ID);
+                String idProvinsi  = MyExcelDoc.getValueCsv(cols, IDX_province_id);
+                String name  = MyExcelDoc.getValueCsv(cols, IDX_kota_name);
 
-                if (idStr == null || idStr.isBlank()) {
-                    log.warn("Skip row {}: id kosong", rowNumber);
+                //id null then skip
+                if (RowSkipUtil.skipIdField(rowNumber, idStr)) {
                     continue;
                 }
+
 
                 Regency p = new Regency();
                 p.setId(Integer.parseInt(idStr));
@@ -160,21 +163,6 @@ public class RegencyMigration {
     // Kalau CSV kamu kompleks (ada koma dalam quotes), bilang ya—aku kasih parser yang handle quotes.
     private String[] splitCsvSimple(String line) {
         return line.split(",", -1);
-    }
-
-    private Integer tryParseInt(String s) {
-        try {
-            return Integer.parseInt(s.trim());
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private String getByIndex(String[] cols, int idx) {
-        if (cols == null) return null;
-        if (idx < 0 || idx >= cols.length) return null;
-        String v = cols[idx];
-        return (v == null || v.isBlank()) ? null : v.trim();
     }
 
 }

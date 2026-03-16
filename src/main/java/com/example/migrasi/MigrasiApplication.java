@@ -110,6 +110,7 @@ public class MigrasiApplication implements CommandLineRunner {
 
                 default -> {
                     System.out.println("Unknown migration: " + migrationName);
+                    throw new RuntimeException("Unknown migration");
                 }
             }
         }

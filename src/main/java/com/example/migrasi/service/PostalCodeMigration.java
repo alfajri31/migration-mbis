@@ -2,6 +2,8 @@ package com.example.migrasi.service;
 
 import com.example.migrasi.model.PostalCode;
 import com.example.migrasi.model.Village;
+import com.example.migrasi.util.MyExcelDoc;
+import com.example.migrasi.util.RowSkipUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
@@ -54,15 +56,15 @@ public class PostalCodeMigration {
 
                 String[] cols = splitCsvSimple(line);
 
-                String idStr = getByIndex(cols, IDX_ID);
-                String idKelurahan  = getByIndex(cols, IDX_kelurahan_id);
-                String idKecamatan  = getByIndex(cols, IDX_kecamatan_id);
-                String idKota  = getByIndex(cols, IDX_kota_id);
-                String idprovinsi  = getByIndex(cols, IDX_provinsi_id);
-                String idpostalCode  = getByIndex(cols, IDX_postal_id);
+                String idStr = MyExcelDoc.getValueCsv(cols, IDX_ID);
+                String idKelurahan  = MyExcelDoc.getValueCsv(cols, IDX_kelurahan_id);
+                String idKecamatan  = MyExcelDoc.getValueCsv(cols, IDX_kecamatan_id);
+                String idKota  = MyExcelDoc.getValueCsv(cols, IDX_kota_id);
+                String idprovinsi  =MyExcelDoc.getValueCsv(cols, IDX_provinsi_id);
+                String idpostalCode  = MyExcelDoc.getValueCsv(cols, IDX_postal_id);
 
-                if (idStr == null || idStr.isBlank()) {
-                    log.warn("Skip row {}: id kosong", rowNumber);
+                //id null then skip
+                if (RowSkipUtil.skipIdField(rowNumber, idStr)) {
                     continue;
                 }
 
@@ -147,43 +149,10 @@ public class PostalCodeMigration {
         return s.replace('\u00A0', ' ').trim().toUpperCase();
     }
 
-    private String getValueCsv(String[] cols, Map<String, Integer> colIndex, String columnName) {
-        Integer idx = colIndex.get(columnName.trim().toUpperCase());
-        if (idx == null) return null;
-        if (idx < 0 || idx >= cols.length) return null;
-
-        String v = cols[idx];
-        if (v == null) return null;
-
-        // buang quote kalau ada
-        v = v.trim();
-        if (v.startsWith("\"") && v.endsWith("\"") && v.length() >= 2) {
-            v = v.substring(1, v.length() - 1);
-        }
-
-        v = v.trim();
-        return v.isEmpty() ? null : v;
-    }
-
     // Split sederhana: cukup untuk CSV yang tidak punya koma di dalam quote.
     // Kalau CSV kamu kompleks (ada koma dalam quotes), bilang ya—aku kasih parser yang handle quotes.
     private String[] splitCsvSimple(String line) {
         return line.split(",", -1);
-    }
-
-    private Integer tryParseInt(String s) {
-        try {
-            return Integer.parseInt(s.trim());
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private String getByIndex(String[] cols, int idx) {
-        if (cols == null) return null;
-        if (idx < 0 || idx >= cols.length) return null;
-        String v = cols[idx];
-        return (v == null || v.isBlank()) ? null : v.trim();
     }
 
 }

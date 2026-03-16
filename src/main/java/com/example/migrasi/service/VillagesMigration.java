@@ -3,6 +3,8 @@ package com.example.migrasi.service;
 import com.example.migrasi.model.District;
 import com.example.migrasi.model.Regency;
 import com.example.migrasi.model.Village;
+import com.example.migrasi.util.MyExcelDoc;
+import com.example.migrasi.util.RowSkipUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
@@ -52,12 +54,12 @@ public class VillagesMigration {
 
                 String[] cols = splitCsvSimple(line);
 
-                String idStr = getByIndex(cols, IDX_ID);
-                String idKecamatan  = getByIndex(cols, IDX_kecamatan_id);
-                String name  = getByIndex(cols, IDX_kelurahan_name);
+                String idStr = MyExcelDoc.getValueCsv(cols, IDX_ID);
+                String idKecamatan  = MyExcelDoc.getValueCsv(cols, IDX_kecamatan_id);
+                String name  = MyExcelDoc.getValueCsv(cols, IDX_kelurahan_name);
 
-                if (idStr == null || idStr.isBlank()) {
-                    log.warn("Skip row {}: id kosong", rowNumber);
+                //id null then skip
+                if (RowSkipUtil.skipIdField(rowNumber, idStr)) {
                     continue;
                 }
 
@@ -169,13 +171,6 @@ public class VillagesMigration {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private String getByIndex(String[] cols, int idx) {
-        if (cols == null) return null;
-        if (idx < 0 || idx >= cols.length) return null;
-        String v = cols[idx];
-        return (v == null || v.isBlank()) ? null : v.trim();
     }
 
 }

@@ -1,6 +1,7 @@
 package com.example.migrasi.service;
 
 import com.example.migrasi.model.Branch;
+import com.example.migrasi.util.RowSkipUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
@@ -18,6 +19,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+
+import static com.example.migrasi.util.MyExcelDoc.*;
 
 @Slf4j
 @Service
@@ -70,13 +73,15 @@ public class KanwilMigration {
                 rowNumber++;
 
                 // Ambil berdasarkan NAMA KOLOM Excel
-                String kantorCabang = getValue(row, colIndex, "Kantor Cabang");
-                String kantorWil = getValue(row, colIndex, "Kanwil");
+                String kantorCabang = getValueExcel(row, colIndex, "Kantor Cabang");
+                String kantorWil = getValueExcel(row, colIndex, "Kanwil");
+
                 //id null then skip
-                if (kantorCabang == null || kantorCabang.isBlank()) {
-                    log.warn("Skip row {}: kantor cabang kosong", rowNumber);
+                if (RowSkipUtil.skipIdField(rowNumber, kantorCabang)) {
                     continue;
                 }
+
+
                 String codeCabang = kantorCabang.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_");
 
                 /*
@@ -153,60 +158,4 @@ public class KanwilMigration {
         log.info("Total processed: {}", processed);
     }
 
-
-
-    private Map<String, Integer> buildColumnIndex(Row headerRow) {
-        Map<String, Integer> map = new HashMap<>();
-        for (Cell cell : headerRow) {
-            if (cell == null) continue;
-
-            String name = cell.getStringCellValue();
-            if (name == null) continue;
-
-            String key = name.trim().toUpperCase();
-            if (!key.isEmpty()) {
-                map.put(key, cell.getColumnIndex());
-            }
-        }
-        log.info("Detected columns: {}", map.keySet());
-        return map;
-    }
-
-    private String getValue(Row row, Map<String, Integer> colIndex, String columnName) {
-        Integer idx = colIndex.get(columnName.trim().toUpperCase());
-        if (idx == null) return null;
-
-        Cell cell = row.getCell(idx);
-        if (cell == null) return null;
-
-        return switch (cell.getCellType()) {
-            case STRING -> trimToNull(cell.getStringCellValue());
-            case NUMERIC -> {
-                if (DateUtil.isCellDateFormatted(cell)) {
-                    yield cell.getLocalDateTimeCellValue().toString();
-                }
-                double v = cell.getNumericCellValue();
-                long lv = (long) v;
-                yield (v == lv) ? String.valueOf(lv) : String.valueOf(v);
-            }
-            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
-            case FORMULA -> switch (cell.getCachedFormulaResultType()) {
-                case STRING -> trimToNull(cell.getStringCellValue());
-                case NUMERIC -> {
-                    double v = cell.getNumericCellValue();
-                    long lv = (long) v;
-                    yield (v == lv) ? String.valueOf(lv) : String.valueOf(v);
-                }
-                case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
-                default -> null;
-            };
-            case BLANK, _NONE, ERROR -> null;
-        };
-    }
-
-    private String trimToNull(String s) {
-        if (s == null) return null;
-        String t = s.trim();
-        return t.isEmpty() ? null : t;
-    }
 }
