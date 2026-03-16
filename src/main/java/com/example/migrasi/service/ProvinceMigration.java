@@ -89,39 +89,6 @@ public class ProvinceMigration {
         log.info("Province migration selesai.");
     }
 
-    private Map<String, Integer> buildColumnIndexCsv(String headerLine) {
-        String[] headers = splitCsvSimple(headerLine);
-        Map<String, Integer> map = new HashMap<>();
-        for (int i = 0; i < headers.length; i++) {
-            String key = normalizeHeader(headers[i]);
-            if (!key.isEmpty()) map.put(key, i);
-        }
-        log.info("Detected CSV columns: {}", map.keySet());
-        return map;
-    }
-
-    private String normalizeHeader(String s) {
-        if (s == null) return "";
-        return s.replace('\u00A0', ' ').trim().toUpperCase();
-    }
-
-    private String getValueCsv(String[] cols, Map<String, Integer> colIndex, String columnName) {
-        Integer idx = colIndex.get(columnName.trim().toUpperCase());
-        if (idx == null) return null;
-        if (idx < 0 || idx >= cols.length) return null;
-
-        String v = cols[idx];
-        if (v == null) return null;
-
-        // buang quote kalau ada
-        v = v.trim();
-        if (v.startsWith("\"") && v.endsWith("\"") && v.length() >= 2) {
-            v = v.substring(1, v.length() - 1);
-        }
-
-        v = v.trim();
-        return v.isEmpty() ? null : v;
-    }
 
     // Split sederhana: cukup untuk CSV yang tidak punya koma di dalam quote.
     // Kalau CSV kamu kompleks (ada koma dalam quotes), bilang ya—aku kasih parser yang handle quotes.
