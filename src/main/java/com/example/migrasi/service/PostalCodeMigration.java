@@ -1,13 +1,17 @@
 package com.example.migrasi.service;
 
+import com.example.migrasi.model.District;
 import com.example.migrasi.model.PostalCode;
 import com.example.migrasi.model.Village;
+import com.example.migrasi.util.BulkUpsertUtil;
 import com.example.migrasi.util.MyExcelDoc;
 import com.example.migrasi.util.RowSkipUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
@@ -36,6 +40,9 @@ public class PostalCodeMigration {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    @Autowired
+    private PlatformTransactionManager txManager;
 
     @Transactional
     public void migrate() {
@@ -85,52 +92,17 @@ public class PostalCodeMigration {
             throw new RuntimeException("Gagal membaca CSV: " + FILE_PATH, ex);
         }
 
-        bulkUpsert(entities);
+        BulkUpsertUtil.bulkUpsert(
+                entities,
+                PostalCode.class,
+                Long.class,
+                PostalCode::getId,
+                "id",
+                entityManager,
+                txManager
+        );
 
         log.info("Province migration selesai.");
-    }
-
-    @jakarta.transaction.Transactional
-    public void bulkUpsert(List<PostalCode> entities) {
-        try {
-            if (entities == null || entities.isEmpty()) return;
-
-            int processed = 0;
-
-            for (PostalCode e : entities) {
-                if (e.getId() == null) {
-                    log.warn("Skip: cif kosong");
-                    continue;
-                }
-
-                Long existingId = entityManager.createQuery(
-                                "select c.id from PostalCode c where c.id = :id", Long.class)
-                        .setParameter("id", e.getId())
-                        .setMaxResults(1)
-                        .getResultStream()
-                        .findFirst().orElse(null);
-
-                if (existingId != null) {
-                    e.setId(existingId);     // penting: set PK supaya merge = UPDATE
-                    entityManager.merge(e);
-                } else {
-                    entityManager.persist(e); // INSERT (id akan di-generate kalau mapping benar)
-                }
-
-                if (++processed % BATCH_SIZE == 0) {
-                    entityManager.flush();
-                    entityManager.clear();
-                    log.info("Processed: {}", processed);
-                }
-            }
-
-            entityManager.flush();
-            entityManager.clear();
-            log.info("Total processed: {}", processed);
-        }catch (Exception e) {
-            log.info("something error occured when upsert: ",e);
-            throw  e;
-        }
     }
 
     private Map<String, Integer> buildColumnIndexCsv(String headerLine) {

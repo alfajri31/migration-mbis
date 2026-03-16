@@ -1,6 +1,8 @@
 package com.example.migrasi.service;
 
 import com.example.migrasi.model.Customer;
+import com.example.migrasi.model.Regency;
+import com.example.migrasi.util.BulkUpsertUtil;
 import com.example.migrasi.util.RowSkipUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -121,59 +123,17 @@ public class SeedCustomerMigration {
             throw new RuntimeException("Gagal membaca Excel: " + FILE_PATH, ex);
         }
 
-        bulkUpsert(entities);
+        BulkUpsertUtil.bulkUpsert(
+                entities,
+                Customer.class,
+                UUID.class,
+                Customer::getCif,
+                "cif",
+                entityManager,
+                txManager
+        );
 
         log.info("Migration selesai.");
-    }
-
-    public void bulkUpsert(List<Customer> entities) {
-        if (entities == null || entities.isEmpty()) return;
-
-        int processed = 0;
-
-        for (Customer e : entities) {
-            DefaultTransactionDefinition def = new DefaultTransactionDefinition();
-            def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-            TransactionStatus status = txManager.getTransaction(def); // BEGIN
-
-            try {
-                //id unique key di database sendiri, id null then skip
-                if (e.getCif() == null || e.getCif().isBlank()) {
-                    log.warn("Skip: cif kosong");
-                    txManager.commit(status); // commit kosong biar rapih
-                    continue;
-                }
-
-                UUID existingId = entityManager.createQuery(
-                                "select c.id from Customer c where c.cif = :cif", UUID.class)
-                        .setParameter("cif", e.getCif())
-                        .setMaxResults(1)
-                        .getResultStream()
-                        .findFirst()
-                        .orElse(null);
-
-                if (existingId != null) {
-                    e.setId(existingId);
-                    entityManager.merge(e);
-                } else {
-                    entityManager.persist(e);
-                }
-
-                entityManager.flush();
-                entityManager.clear();
-
-                txManager.commit(status); // COMMIT ✅
-                processed++;
-
-            } catch (Exception ex) {
-                txManager.rollback(status); // ROLLBACK ❌ (cuma item ini)
-                entityManager.clear();      // bersihin persistence context
-                log.warn("Skip error cif {} : {}", e.getCif(), ex.getMessage());
-            }
-        }
-
-        log.info("Total processed: {}", processed);
     }
 
 }

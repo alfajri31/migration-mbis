@@ -10,7 +10,7 @@ public class MigrasiApplication implements CommandLineRunner {
 
     // 🔥 Bisa isi banyak sekaligus
     private static final String[] MIGRATION_NAMES = {
-            "seed-customer"
+            "kodepos"
 
     };
 

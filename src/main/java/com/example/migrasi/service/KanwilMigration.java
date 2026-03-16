@@ -1,6 +1,8 @@
 package com.example.migrasi.service;
 
 import com.example.migrasi.model.Branch;
+import com.example.migrasi.model.District;
+import com.example.migrasi.util.BulkUpsertUtil;
 import com.example.migrasi.util.RowSkipUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -101,61 +103,16 @@ public class KanwilMigration {
             throw new RuntimeException("Gagal membaca Excel: " + FILE_PATH, ex);
         }
 
-        bulkUpsert(entities);
+        BulkUpsertUtil.bulkUpsert(
+                entities,Branch.class,
+                String.class,
+                Branch::getCode,
+                "code",
+                entityManager,
+                txManager
+        );
 
         log.info("Migration selesai.");
-    }
-
-    public void bulkUpsert(List<Branch> entities) {
-        if (entities == null || entities.isEmpty()) return;
-
-        int processed = 0;
-
-        for (Branch e : entities) {
-            DefaultTransactionDefinition def = new DefaultTransactionDefinition();
-            def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-            TransactionStatus status = txManager.getTransaction(def); // BEGIN
-
-            try {
-                if (e.getCode() == null || e.getCode().isBlank()) {
-                    log.warn("Skip: cif kosong");
-                    txManager.commit(status); // commit kosong biar rapih
-                    continue;
-                }
-
-                String existingId = entityManager.createQuery(
-                                "select c.id from Branch c where c.code = :code", String.class)
-                        .setParameter("code", e.getCode())
-                        .setMaxResults(1)
-                        .getResultStream()
-                        .findFirst()
-                        .orElse(null);
-
-                if (existingId != null) {
-                    e.setId(existingId);
-                    e.setRegion(e.getRegion());
-                    e.setCode(e.getCode());
-                    e.setName(e.getName());
-                    entityManager.merge(e);
-                } else {
-                    entityManager.persist(e);
-                }
-
-                entityManager.flush();
-                entityManager.clear();
-
-                txManager.commit(status); // COMMIT ✅
-                processed++;
-
-            } catch (Exception ex) {
-                txManager.rollback(status); // ROLLBACK ❌ (cuma item ini)
-                entityManager.clear();      // bersihin persistence context
-                log.warn("Skip error name {} : {}", e.getName(), ex.getMessage());
-            }
-        }
-
-        log.info("Total processed: {}", processed);
     }
 
 }
