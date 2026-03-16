@@ -1,8 +1,6 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.model.District;
 import com.example.migrasi.model.PostalCode;
-import com.example.migrasi.model.Village;
 import com.example.migrasi.util.BulkUpsertUtil;
 import com.example.migrasi.util.MyExcelDoc;
 import com.example.migrasi.util.RowSkipUtil;
@@ -20,9 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service

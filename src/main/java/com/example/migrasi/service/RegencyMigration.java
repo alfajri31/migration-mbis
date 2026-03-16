@@ -1,7 +1,5 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.model.PostalCode;
-import com.example.migrasi.model.Province;
 import com.example.migrasi.model.Regency;
 import com.example.migrasi.util.BulkUpsertUtil;
 import com.example.migrasi.util.MyExcelDoc;
@@ -20,9 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service

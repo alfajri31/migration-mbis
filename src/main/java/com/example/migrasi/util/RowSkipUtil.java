@@ -2,8 +2,6 @@ package com.example.migrasi.util;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Map;
-
 @Slf4j
 public class RowSkipUtil {
 
