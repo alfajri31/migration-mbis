@@ -2,6 +2,7 @@ package com.example.migrasi.service;
 
 import com.example.migrasi.model.Customer;
 import com.example.migrasi.util.Normalizing;
+import com.example.migrasi.util.RowSkipUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
@@ -102,11 +103,14 @@ public class CustomerMigration {
                 String generator = getValueExcel(row, colIndex, "Generator");
 
                 //id unique key di excel, id null then skip
-                if (cif == null || cif.isBlank() || jenis_perusahaan == null || jenis_perusahaan.isBlank() || kantor_cabang == null || bumn_non_bumn == null) {
-                    log.warn("Skip row {}: CIF kosong", rowNumber);
+                //id null then skip
+                if (RowSkipUtil.skipIdField(rowNumber, cif)) {
                     continue;
                 }
-
+                //id null then skip
+                if (RowSkipUtil.skipIdField(rowNumber, jenis_perusahaan)) {
+                    continue;
+                }
                 /*
 ************************************************************************************************************************
 */
