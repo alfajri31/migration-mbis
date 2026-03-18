@@ -1,8 +1,10 @@
 package com.example.migrasi.util;
 
+import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@UtilityClass
 public class RowSkipUtil {
 
     // untuk CSV (biasanya hanya 1 ID field)

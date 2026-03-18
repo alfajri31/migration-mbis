@@ -1,16 +1,19 @@
 package com.example.migrasi;
 
 import com.example.migrasi.service.*;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
+@AllArgsConstructor
+@Slf4j
 public class MigrasiApplication implements CommandLineRunner {
 
-    // 🔥 Bisa isi banyak sekaligus
     private static final String[] MIGRATION_NAMES = {
-            "kodepos"
+            "provinsi"
 
     };
 
@@ -25,29 +28,6 @@ public class MigrasiApplication implements CommandLineRunner {
     private final KanwilMigration kanwilMigration;
     private final PostalCodeMigration postalCodeMigration;
 
-
-    public MigrasiApplication(CustomerMigration customerMigration,
-                              ProvinceMigration provinceMigration,
-                              RegencyMigration regencyMigration,
-                              DistrictMigration districtMigration,
-                              VillagesMigration villagesMigration,
-                              CabangMigration cabangMigration,
-                              DivisiMigration divisionMigration,
-                              KanwilMigration kanwilMigration,
-                              SeedCustomerMigration seedCustomerMigration,
-                              PostalCodeMigration postalCodeMigration) {
-        this.customerMigration = customerMigration;
-        this.provinceMigration = provinceMigration;
-        this.regencyMigration = regencyMigration;
-        this.districtMigration = districtMigration;
-        this.villagesMigration = villagesMigration;
-        this.cabangMigration = cabangMigration;
-        this.divisionMigration = divisionMigration;
-        this.kanwilMigration = kanwilMigration;
-        this.seedCustomerMigration = seedCustomerMigration;
-        this.postalCodeMigration = postalCodeMigration;
-    }
-
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
     }
@@ -59,57 +39,57 @@ public class MigrasiApplication implements CommandLineRunner {
 
             switch (migrationName.toLowerCase()) {
                 case "customer" -> {
-                    System.out.println("Running Customer Migration...");
+                    log.info("Running Customer Migration...");
                     customerMigration.migrate();
                 }
 
                 case "provinsi" -> {
-                    System.out.println("Running Province Migration...");
+                    log.info("Running Province Migration...");
                     provinceMigration.migrate();
                 }
 
                 case "kota" -> {
-                    System.out.println("Running Regency Migration...");
+                    log.info("Running Regency Migration...");
                     regencyMigration.migrate();
                 }
 
                 case "kecamatan" -> {
-                    System.out.println("Running district Migration...");
+                    log.info("Running district Migration...");
                     districtMigration.migrate();
                 }
 
                 case "kelurahan" -> {
-                    System.out.println("Running district Migration...");
+                    log.info("Running district Migration...");
                     villagesMigration.migrate();
                 }
 
                 case "kodepos" -> {
-                    System.out.println("Running Seed kode pos Migration...");
+                    log.info("Running Seed kode pos Migration...");
                     postalCodeMigration.migrate();
                 }
 
                 case "cabang" -> {
-                    System.out.println("Running cabang Migration...");
+                    log.info("Running cabang Migration...");
                     cabangMigration.migrate();
                 }
 
                 case "divisi" -> {
-                    System.out.println("Running division Migration...");
+                    log.info("Running division Migration...");
                     divisionMigration.migrate();
                 }
 
                 case "kanwil" -> {
-                    System.out.println("Running kanwil Migration...");
+                    log.info("Running kanwil Migration...");
                     kanwilMigration.migrate();
                 }
 
                 case "seed-customer" -> {
-                    System.out.println("Running Seed Customer Migration...");
+                    log.info("Running Seed Customer Migration...");
                     seedCustomerMigration.migrate();
                 }
 
                 default -> {
-                    System.out.println("Unknown migration: " + migrationName);
+                    log.info("Unknown migration: {} ", migrationName);
                     throw new RuntimeException("Unknown migration");
                 }
             }

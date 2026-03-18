@@ -1,5 +1,6 @@
 package com.example.migrasi.util;
 
+import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DateUtil;
@@ -9,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
+@UtilityClass
 public class MyExcelDoc {
 
     public static String getValueExcel(Row row, Map<String, Integer> colIndex, String columnName) {

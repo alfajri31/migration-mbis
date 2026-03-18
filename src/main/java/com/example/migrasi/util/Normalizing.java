@@ -1,5 +1,8 @@
 package com.example.migrasi.util;
 
+import lombok.experimental.UtilityClass;
+
+@UtilityClass
 public class Normalizing {
 
     public static String normalizeNpwp(String npwp) {

@@ -1,6 +1,7 @@
 package com.example.migrasi.util;
 
 import jakarta.persistence.EntityManager;
+import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.function.Function;
 
 @Slf4j
+@UtilityClass
 public class BulkUpsertUtil {
 
     public static <T, ID> int bulkUpsert(

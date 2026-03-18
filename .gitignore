@@ -70,3 +70,8 @@ coverage/
 *.lcov
 *.xlsx
 *.csv
+*.traineddata
+*.jpg
+*.jpeg
+*.png
+*.pdf
