@@ -15,15 +15,15 @@ import java.util.*;
 
 @Service
 @Slf4j
-public class PageParserService {
+public class AiPageParserService {
 
     @Value("${ai.model.picture}")
     private String aiModel;
 
-    @Value("${prompt.user}")
+    @Value("${prompt.user.picture}")
     private String promptUser;
 
-    @Value("${system.feedback}")
+    @Value("${system.feedback.picture}")
     private String systemFeedback;
 
     private final RestTemplate restTemplate = new RestTemplate();
@@ -98,10 +98,6 @@ public class PageParserService {
         ObjectMapper mapper = new ObjectMapper();
 
         try {
-//            jsonString = jsonString
-//                    .replace("```json", "")
-//                    .replace("```", "")
-//                    .trim();
 
             jsonString = jsonString
                     .replaceAll("\\n", "")

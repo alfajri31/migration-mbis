@@ -6,7 +6,9 @@ import net.sourceforge.tess4j.Tesseract;
 
 import java.io.File;
 import java.net.URL;
-import java.util.*;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @UtilityClass
 public class OCRUtil {

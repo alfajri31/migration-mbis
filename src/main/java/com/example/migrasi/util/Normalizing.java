@@ -43,6 +43,4 @@ public class Normalizing {
         return t.isEmpty() ? null : t;
     }
 
-
-
 }

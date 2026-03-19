@@ -1,6 +1,6 @@
 package com.example.migrasi.service;
 
-import com.example.migrasi.AI.PageParserService;
+import com.example.migrasi.AI.AiPageParserService;
 import com.example.migrasi.model.Province;
 import com.example.migrasi.util.BulkUpsertUtil;
 import com.example.migrasi.util.MyExcelDoc;
@@ -20,7 +20,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -39,7 +38,7 @@ public class ProvinceMigration {
     private PlatformTransactionManager txManager;
 
     @Autowired
-    private PageParserService pageParserService;
+    private AiPageParserService aiPageParserService;
 
     @Transactional
     public void migrate() {

@@ -1,11 +1,19 @@
 package com.example.migrasi;
 
+import com.example.migrasi.AI.AiBaseKnowledgeService;
 import com.example.migrasi.service.*;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @SpringBootApplication
 @AllArgsConstructor
@@ -13,7 +21,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class MigrasiApplication implements CommandLineRunner {
 
     private static final String[] MIGRATION_NAMES = {
-            "provinsi"
+            ""
 
     };
 
@@ -27,13 +35,22 @@ public class MigrasiApplication implements CommandLineRunner {
     private final DivisiMigration divisionMigration;
     private final KanwilMigration kanwilMigration;
     private final PostalCodeMigration postalCodeMigration;
+    private final DatabaseExportService databaseExportService;
+    private final AiBaseKnowledgeService aiBaseKnowledgeService;
+    private List<String> basesKnowledge;
 
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
     }
 
     @Override
-    public void run(String... args) {
+    public void run(String... args) throws Exception {
+
+        String jsonString = databaseExportService.exportDatabase(Set.of("log_table"));
+
+        addBasesKnowledge(jsonString);
+
+        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge);
 
         for (String migrationName : MIGRATION_NAMES) {
 
@@ -96,4 +113,18 @@ public class MigrasiApplication implements CommandLineRunner {
         }
         System.exit(0); // optional
     }
+
+    private void addBasesKnowledge(String jsonString) throws JsonProcessingException {
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        List<Map<String, Object>> list =
+                mapper.readValue(jsonString, new TypeReference<>() {});
+
+        for (Map<String, Object> item : list) {
+            basesKnowledge.add(mapper.writeValueAsString(item));
+        }
+    }
+
+
 }
