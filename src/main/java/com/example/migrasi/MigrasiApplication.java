@@ -39,7 +39,7 @@ public class MigrasiApplication implements CommandLineRunner {
     private final DatabaseExportService databaseExportService;
     private final AiBaseKnowledgeService aiBaseKnowledgeService;
     private List<String> detailsKnowledge;
-    private List<Map<String,List<String>>> basesKnowledge;
+    private Map<String,List<String>> basesKnowledge;
 
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
@@ -54,10 +54,10 @@ public class MigrasiApplication implements CommandLineRunner {
 
         map.put("database", addDetailsKnowledge(jsonString));
 
-        basesKnowledge.add(map);
+        basesKnowledge.putAll(map);
 
         aiBaseKnowledgeService.processKnowledgeBase(
-                basesKnowledge.get(0).get("database"));
+                basesKnowledge.get("database"));
 
         for (String migrationName : MIGRATION_NAMES) {
 
