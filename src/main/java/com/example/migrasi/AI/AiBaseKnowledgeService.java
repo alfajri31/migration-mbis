@@ -104,7 +104,7 @@ public class AiBaseKnowledgeService {
 
         messages.add(Map.of(
                 "role", "system",
-                "content", "pembahasan seputar "+key+", "+systemFeedback
+                "content", "pembahasan BAB seputar "+key+", "+systemFeedback
         ));
 
         messages.add(Map.of(
@@ -150,7 +150,7 @@ public class AiBaseKnowledgeService {
 
         messages.add(Map.of(
                 "role", "system",
-                "content", "pembahasan seputar kekurangannya "+key
+                "content", "summary seputar kekurangan / penemuan / discovery antar BAB"
         ));
 
         messages.add(Map.of(
