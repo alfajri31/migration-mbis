@@ -1,5 +1,6 @@
 package com.example.migrasi.service;
 
+import com.example.migrasi.AI.PageParserService;
 import com.example.migrasi.model.Province;
 import com.example.migrasi.util.BulkUpsertUtil;
 import com.example.migrasi.util.MyExcelDoc;
@@ -37,8 +38,12 @@ public class ProvinceMigration {
     @Autowired
     private PlatformTransactionManager txManager;
 
+    @Autowired
+    private PageParserService pageParserService;
+
     @Transactional
     public void migrate() {
+
         log.info("Running province migration from CSV: {}", FILE_PATH);
 
         List<Province> entities = new ArrayList<>();
