@@ -31,7 +31,7 @@ public class AiBaseKnowledgeService {
 
         String url = "http://localhost:11434/api/chat";
 
-        List<String> chunks = chunkByLengthSize(baseKnowledges, 100);
+        List<String> chunks = chunkByLengthSize(baseKnowledges, 100).subList(0,2);
 
         log.info("Total chunks created: {}", chunks.size());
 

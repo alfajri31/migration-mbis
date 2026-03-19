@@ -11,6 +11,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,7 +38,8 @@ public class MigrasiApplication implements CommandLineRunner {
     private final PostalCodeMigration postalCodeMigration;
     private final DatabaseExportService databaseExportService;
     private final AiBaseKnowledgeService aiBaseKnowledgeService;
-    private List<String> basesKnowledge;
+    private List<String> detailsKnowledge;
+    private List<Map<String,List<String>>> basesKnowledge;
 
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
@@ -48,9 +50,14 @@ public class MigrasiApplication implements CommandLineRunner {
 
         String jsonString = databaseExportService.exportDatabase(Set.of("log_table"));
 
-        addBasesKnowledge(jsonString);
+        HashMap<String,List<String>> map = new HashMap<>();
 
-        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge);
+        map.put("database", addDetailsKnowledge(jsonString));
+
+        basesKnowledge.add(map);
+
+        aiBaseKnowledgeService.processKnowledgeBase(
+                basesKnowledge.get(0).get("database"));
 
         for (String migrationName : MIGRATION_NAMES) {
 
@@ -114,7 +121,7 @@ public class MigrasiApplication implements CommandLineRunner {
         System.exit(0); // optional
     }
 
-    private void addBasesKnowledge(String jsonString) throws JsonProcessingException {
+    private List<String> addDetailsKnowledge(String jsonString) throws JsonProcessingException {
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -122,8 +129,10 @@ public class MigrasiApplication implements CommandLineRunner {
                 mapper.readValue(jsonString, new TypeReference<>() {});
 
         for (Map<String, Object> item : list) {
-            basesKnowledge.add(mapper.writeValueAsString(item));
+            detailsKnowledge.add(mapper.writeValueAsString(item));
         }
+
+        return detailsKnowledge;
     }
 
 
