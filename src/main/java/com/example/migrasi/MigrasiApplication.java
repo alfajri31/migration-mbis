@@ -52,7 +52,7 @@ public class MigrasiApplication implements CommandLineRunner {
 
         HashMap<String,List<String>> map = new HashMap<>();
 
-        map.put("my database", addDetailsKnowledge(jsonString));
+        map.put("database project", addDetailsKnowledge(jsonString));
 
         basesKnowledge.putAll(map);
 
