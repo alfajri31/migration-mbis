@@ -56,8 +56,7 @@ public class MigrasiApplication implements CommandLineRunner {
 
         basesKnowledge.putAll(map);
 
-        aiBaseKnowledgeService.processKnowledgeBase(
-                basesKnowledge.get("database"));
+        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge);
 
         for (String migrationName : MIGRATION_NAMES) {
 

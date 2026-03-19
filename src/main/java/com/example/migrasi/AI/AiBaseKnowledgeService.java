@@ -27,115 +27,135 @@ public class AiBaseKnowledgeService {
     private final RestTemplate restTemplate = new RestTemplate();
 
 
-    public void processKnowledgeBase(List<String> baseKnowledges) throws Exception {
+    public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
 
         String url = "http://localhost:11434/api/chat";
 
-        List<String> chunks = chunkByLengthSize(baseKnowledges, 100).subList(0,2);
+        int globalIndex = 0;
 
-        log.info("Total chunks created: {}", chunks.size());
+        // 🔹 step 1: chunk per key
+        Map<String, List<String>> chunkedData =
+                chunkByLengthSize(data, 500);
 
-        int index = 0;
+        for (Map.Entry<String, List<String>> entry : chunkedData.entrySet()) {
 
-        for (String chunk : chunks) {
+            String key = entry.getKey();
 
-            index++;
+            List<String> chunks = entry.getValue();
 
-            log.info("---- PROCESSING CHUNK {}/{} ----", index, chunks.size());
+            log.info("==== PROCESSING KEY: {} | total chunks: {} ====", key, chunks.size());
 
-            String finalPrompt = promptUser +
-                    "\n\nBase Knowledge:\n" +
-                    chunk +
-                    "\n---";
+            int index = 0;
 
-            List<Map<String, Object>> messages = new ArrayList<>();
+            for (String chunk : chunks) {
 
-            messages.add(Map.of(
-                    "role", "system",
-                    "content", systemFeedback
-            ));
+                index++;
+                globalIndex++;
 
-            messages.add(Map.of(
-                    "role", "user",
-                    "content", finalPrompt
-            ));
+                log.info("---- [{}] CHUNK {}/{} ----", key, index, chunks.size());
 
-            Map<String, Object> request = new HashMap<>();
-            Map<String, Object> options = new HashMap<>();
+                // ✅ Bungkus per key (INI YANG PENTING)
+                String finalPrompt = promptUser +
+                        "\n\nBase Knowledge (" + key + "):\n" +
+                        "{ \"" + key + "\": [\n" + chunk + "\n] }\n---";
 
-            options.put("temperature", 0);
-            options.put("num_predict", 100);
+                List<Map<String, Object>> messages = new ArrayList<>();
 
-            request.put("options", options);
-            request.put("model", aiModel);
-            request.put("messages", messages);
-            request.put("stream", false);
+                messages.add(Map.of(
+                        "role", "system",
+                        "content", systemFeedback
+                ));
 
-            try {
+                messages.add(Map.of(
+                        "role", "user",
+                        "content", finalPrompt
+                ));
 
-                long startTime = System.currentTimeMillis();
+                Map<String, Object> options = new HashMap<>();
+                options.put("temperature", 0);
+                options.put("num_predict", 100);
 
-                log.info("Calling AI API for chunk {}", index);
+                Map<String, Object> request = new HashMap<>();
+                request.put("options", options);
+                request.put("model", aiModel);
+                request.put("messages", messages);
+                request.put("stream", false);
 
-                ResponseEntity<Map> response =
-                        restTemplate.postForEntity(url, request, Map.class);
+                try {
 
-                long duration = System.currentTimeMillis() - startTime;
+                    long startTime = System.currentTimeMillis();
 
-                log.info("AI response received for chunk {} ({} ms)", index, duration);
+                    log.info("Calling AI API [{} - chunk {}]", key, index);
 
-                Map body = response.getBody();
+                    ResponseEntity<Map> response =
+                            restTemplate.postForEntity(url, request, Map.class);
 
-                Map message = (Map) body.get("message");
+                    long duration = System.currentTimeMillis() - startTime;
 
-                String content = message.get("content").toString();
+                    log.info("AI response [{} - chunk {}] ({} ms)", key, index, duration);
 
-                log.info(content);
+                    Map body = response.getBody();
+                    Map message = (Map) body.get("message");
 
-            } catch (Exception e) {
-                log.info("Error Occurred prompt AI {}", e.getMessage());
-                throw new Exception(e.getMessage());
+                    String content = message.get("content").toString();
+
+                    log.info("AI RESPONSE [{} - chunk {}]:\n{}", key, index, content);
+
+                } catch (Exception e) {
+                    log.error("Error Occurred prompt AI [{} - chunk {}]: {}", key, index, e.getMessage());
+                    throw new Exception(e.getMessage());
+                }
             }
         }
     }
 
-    public List<String> chunkByLengthSize(List<String> data, int maxLength) {
+    public Map<String, List<String>> chunkByLengthSize(Map<String, List<String>> data, int maxLength) {
 
-        List<String> chunks = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
+        Map<String, List<String>> result = new HashMap<>();
 
-        for (String item : data) {
+        for (Map.Entry<String, List<String>> entry : data.entrySet()) {
 
-            // kalau item sendiri lebih besar dari maxLength
-            if (item.length() > maxLength) {
+            String key = entry.getKey();
+            List<String> list = entry.getValue();
 
-                // simpan current dulu kalau ada isi
-                if (!current.isEmpty()) {
-                    chunks.add(current.toString());
-                    current = new StringBuilder();
+            List<String> chunks = new ArrayList<>();
+            StringBuilder current = new StringBuilder();
+
+            for (String item : list) {
+
+                // 🔹 kalau item sendiri lebih besar dari maxLength
+                if (item.length() > maxLength) {
+
+                    // simpan current dulu kalau ada isi
+                    if (!current.isEmpty()) {
+                        chunks.add(current.toString());
+                        current = new StringBuilder();
+                    }
+
+                    // item jadi chunk sendiri
+                    chunks.add(item);
+                    continue;
                 }
 
-                // langsung jadi 1 chunk sendiri (tetap utuh)
-                chunks.add(item);
-
-                continue;
-            }
-
-            // kalau ditambah melebihi limit → simpan dulu
-            if (current.length() + item.length() > maxLength) {
-                if (!current.isEmpty()) {
-                    chunks.add(current.toString());
-                    current = new StringBuilder();
+                // 🔹 kalau ditambah melebihi limit → simpan dulu
+                if (current.length() + item.length() > maxLength) {
+                    if (!current.isEmpty()) {
+                        chunks.add(current.toString());
+                        current = new StringBuilder();
+                    }
                 }
+
+                current.append(item).append("\n");
             }
 
-            current.append(item).append("\n");
+            // 🔹 sisa terakhir
+            if (!current.isEmpty()) {
+                chunks.add(current.toString());
+            }
+
+            result.put(key, chunks);
         }
 
-        if (!current.isEmpty()) {
-            chunks.add(current.toString());
-        }
-
-        return chunks;
+        return result;
     }
 }
