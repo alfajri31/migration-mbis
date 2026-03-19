@@ -8,6 +8,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,14 +32,17 @@ public class AiBaseKnowledgeService {
     @Value("${system.feedback.base.knowledge}")
     private String systemFeedback;
 
+    @Value("${agent.host.url}")
+    private String url;
+
+
+
     private final RestTemplate restTemplate = new RestTemplate();
 
     public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
 
-        String url = "http://localhost:11434/api/chat";
-
-        Map<String, List<String>> chunkedData =
-                chunkByLengthSize(data, 100);
+//        Map<String, List<String>> chunkedData =
+//                chunkByLengthSize(data, 100);
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -100,7 +109,7 @@ public class AiBaseKnowledgeService {
 
             String content = message.get("content").toString();
 
-            log.info("FINAL AI RESPONSE:\n{}", content);
+            saveToFile(content);
 
         } catch (Exception e) {
             log.error("Error Occurred prompt AI {}", e.getMessage());
@@ -159,7 +168,7 @@ public class AiBaseKnowledgeService {
                 chunks.add(current.toString());
             }
 
-            result.put(key, chunks.subList(0,5));
+            result.put(key, chunks);
         }
 
         return result;
@@ -169,5 +178,29 @@ public class AiBaseKnowledgeService {
         if (text == null || text.isEmpty()) return 0;
 
         return text.length() / 4;
+    }
+
+    private void saveToFile(String content) throws Exception {
+
+        String folderPath = "summary";
+
+        // format tanggal waktu: 2026-03-19_14-30-25
+        String timestamp = LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+
+        String fileName = timestamp + ".md";
+
+        Path directory = Paths.get(folderPath);
+        Path filePath = directory.resolve(fileName);
+
+        // buat folder kalau belum ada
+        if (!Files.exists(directory)) {
+            Files.createDirectories(directory);
+        }
+
+        // simpan file
+        Files.writeString(filePath, content, StandardOpenOption.CREATE);
+
+        System.out.println("File saved: " + filePath.toAbsolutePath());
     }
 }
