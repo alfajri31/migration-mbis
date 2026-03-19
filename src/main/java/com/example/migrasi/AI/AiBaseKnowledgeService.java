@@ -1,5 +1,7 @@
 package com.example.migrasi.AI;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -18,98 +20,98 @@ public class AiBaseKnowledgeService {
     @Value("${ai.model.base.knowledge}")
     private String aiModel;
 
-    @Value("${prompt.user.base.knowledge}")
-    private String promptUser;
+    @Value("${prompt.user.base.knowledge.final}")
+    private String finalUserPrompt;
 
     @Value("${system.feedback.base.knowledge}")
     private String systemFeedback;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-
     public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
 
         String url = "http://localhost:11434/api/chat";
 
-        int globalIndex = 0;
+//        Map<String, List<String>> chunkedData =
+//                chunkByLengthSize(data, 100);
 
-        // 🔹 step 1: chunk per key
-        Map<String, List<String>> chunkedData =
-                chunkByLengthSize(data, 500);
+        ObjectMapper mapper = new ObjectMapper();
 
-        for (Map.Entry<String, List<String>> entry : chunkedData.entrySet()) {
+        Map<String, Object> finalContext = new HashMap<>();
+
+        for (Map.Entry<String, List<String>> entry : data.entrySet()) {
 
             String key = entry.getKey();
-
             List<String> chunks = entry.getValue();
 
-            log.info("==== PROCESSING KEY: {} | total chunks: {} ====", key, chunks.size());
-
-            int index = 0;
+            List<Object> mergedList = new ArrayList<>();
 
             for (String chunk : chunks) {
 
-                index++;
-                globalIndex++;
+                List parsed = mapper.readValue("[" + chunk + "]", List.class);
 
-                log.info("---- [{}] CHUNK {}/{} ----", key, index, chunks.size());
-
-                // ✅ Bungkus per key (INI YANG PENTING)
-                String finalPrompt = promptUser +
-                        "\n\nBase Knowledge (" + key + "):\n" +
-                        "{ \"" + key + "\": [\n" + chunk + "\n] }\n---";
-
-                List<Map<String, Object>> messages = new ArrayList<>();
-
-                messages.add(Map.of(
-                        "role", "system",
-                        "content", systemFeedback
-                ));
-
-                messages.add(Map.of(
-                        "role", "user",
-                        "content", finalPrompt
-                ));
-
-                Map<String, Object> options = new HashMap<>();
-                options.put("temperature", 0);
-                options.put("num_predict", 100);
-
-                Map<String, Object> request = new HashMap<>();
-                request.put("options", options);
-                request.put("model", aiModel);
-                request.put("messages", messages);
-                request.put("stream", false);
-
-                try {
-
-                    long startTime = System.currentTimeMillis();
-
-                    log.info("Calling AI API [{} - chunk {}]", key, index);
-
-                    ResponseEntity<Map> response =
-                            restTemplate.postForEntity(url, request, Map.class);
-
-                    long duration = System.currentTimeMillis() - startTime;
-
-                    log.info("AI response [{} - chunk {}] ({} ms)", key, index, duration);
-
-                    Map body = response.getBody();
-                    Map message = (Map) body.get("message");
-
-                    String content = message.get("content").toString();
-
-                    log.info("AI RESPONSE [{} - chunk {}]:\n{}", key, index, content);
-
-                } catch (Exception e) {
-                    log.error("Error Occurred prompt AI [{} - chunk {}]: {}", key, index, e.getMessage());
-                    throw new Exception(e.getMessage());
-                }
+                mergedList.addAll(parsed);
             }
+
+            finalContext.put(key, mergedList);
+        }
+
+        String finalJson = mapper.writeValueAsString(finalContext);
+
+        int estimatedTokens = estimateTokens(finalJson);
+
+        log.info("Estimated tokens: {}", estimatedTokens);
+
+        List<Map<String, Object>> messages = new ArrayList<>();
+
+        messages.add(Map.of(
+                "role", "system",
+                "content", systemFeedback
+        ));
+
+        String finalPrompt = finalUserPrompt+": "+ finalJson;
+
+        messages.add(Map.of(
+                "role", "user",
+                "content", finalPrompt
+        ));
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("model", aiModel);
+        request.put("messages", messages);
+        request.put("stream", false);
+
+        try {
+
+            long startTime = System.currentTimeMillis();
+
+            log.info("Calling AI API (SINGLE CONTEXT)");
+
+            ResponseEntity<Map> response =
+                    restTemplate.postForEntity(url, request, Map.class);
+
+            long duration = System.currentTimeMillis() - startTime;
+
+            log.info("AI response received ({} ms)", duration);
+
+            Map body = response.getBody();
+
+            Map message = (Map) body.get("message");
+
+            String content = message.get("content").toString();
+
+            log.info("FINAL AI RESPONSE:\n{}", content);
+
+        } catch (Exception e) {
+            log.error("Error Occurred prompt AI {}", e.getMessage());
+            throw new Exception(e.getMessage());
         }
     }
 
-    public Map<String, List<String>> chunkByLengthSize(Map<String, List<String>> data, int maxLength) {
+    public Map<String, List<String>> chunkByLengthSize(Map<String, List<String>> data, int maxLength)
+            throws JsonProcessingException {
+
+        ObjectMapper mapper = new ObjectMapper();
 
         Map<String, List<String>> result = new HashMap<>();
 
@@ -123,39 +125,49 @@ public class AiBaseKnowledgeService {
 
             for (String item : list) {
 
-                // 🔹 kalau item sendiri lebih besar dari maxLength
-                if (item.length() > maxLength) {
+                String minified = mapper.writeValueAsString(
+                        mapper.readTree(item)
+                );
 
-                    // simpan current dulu kalau ada isi
+                // kalau item sendiri lebih besar
+                if (minified.length() > maxLength) {
+
                     if (!current.isEmpty()) {
                         chunks.add(current.toString());
                         current = new StringBuilder();
                     }
 
-                    // item jadi chunk sendiri
-                    chunks.add(item);
+                    chunks.add(minified);
                     continue;
                 }
 
-                // 🔹 kalau ditambah melebihi limit → simpan dulu
-                if (current.length() + item.length() > maxLength) {
+                if (current.length() + minified.length() + 1 > maxLength) {
                     if (!current.isEmpty()) {
                         chunks.add(current.toString());
                         current = new StringBuilder();
                     }
                 }
 
-                current.append(item).append("\n");
+                if (!current.isEmpty()) {
+                    current.append(",");
+                }
+
+                current.append(minified);
             }
 
-            // 🔹 sisa terakhir
             if (!current.isEmpty()) {
                 chunks.add(current.toString());
             }
 
-            result.put(key, chunks);
+            result.put(key, chunks.subList(0,5));
         }
 
         return result;
+    }
+
+    public int estimateTokens(String text) {
+        if (text == null || text.isEmpty()) return 0;
+
+        return text.length() / 4;
     }
 }
