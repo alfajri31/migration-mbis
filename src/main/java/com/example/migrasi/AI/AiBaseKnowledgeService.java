@@ -32,8 +32,8 @@ public class AiBaseKnowledgeService {
 
         String url = "http://localhost:11434/api/chat";
 
-//        Map<String, List<String>> chunkedData =
-//                chunkByLengthSize(data, 100);
+        Map<String, List<String>> chunkedData =
+                chunkByLengthSize(data, 100);
 
         ObjectMapper mapper = new ObjectMapper();
 
