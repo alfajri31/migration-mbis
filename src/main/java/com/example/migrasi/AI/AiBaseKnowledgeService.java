@@ -112,14 +112,54 @@ public class AiBaseKnowledgeService {
 
         String reducePrompt = mapper.writeValueAsString(
                 Map.of(
-                        "task", "Kesimpulan",
-                        "instruction", "Gabungkan seluruh hasil Buatkan hasil analisis serta FOKUS pada perbaikan",
+                        "task", "Analisis Data Detail Berbasis Field dan Struktur",
+                        "instruction", String.join(" ",
+                                "Analisis seluruh data yang diberikan secara mendalam hingga level field dan struktur.",
+                                "Identifikasi peran masing-masing rel_ secara kontekstual pada nama rel_ seperti 'rel_database' artinya relevansi dengan database yang berjalan saat ini,",
+                                "kemudian lakukan perbandingan di masing-masing rel_ untuk menemukan perbedaan, kesalahan, atau potensi masalah.",
+                                "Fokuskan analisis pada level field, tipe data, struktur, dan konsistensi syntax."
+                        ),
                         "rules", List.of(
-                                "1. Data saling berkaitan contoh 'database_key' artinya ini relevansi database yang sedang berjalan saat ini",
-                                "2. Gunakan bahasa Indonesia!",
-                                "3. Fokus pada insight penting",
-                                "4. Jelaskan jika ada ambiguitas dalam section khusus",
-                                "4. Fokus pada perbaikan"
+                                "1. lakukan identifikasi masalah di masing-masing rel_",
+                                "2. Identifikasi peran data berdasarkan struktur dan isi.",
+                                "3. Lakukan analisis hingga level field/kolom, bukan hanya level object.",
+                                "4. Sebutkan secara eksplisit nama field yang bermasalah.",
+                                "5. Validasi tipe data antar data (misal: string vs number vs boolean).",
+                                "6. Identifikasi field yang missing, null, atau tidak sesuai.",
+                                "7. Identifikasi perbedaan struktur (schema mismatch).",
+                                "8. Gunakan bahasa Indonesia.",
+                                "9. Jika ada ambiguitas, jelaskan secara spesifik field mana yang ambigu.",
+                                "10. Berikan rekomendasi perbaikan yang spesifik per field."
+                        ),
+                        "analysis_focus", List.of(
+                                "Field existence (apakah field ada atau tidak)",
+                                "Field type consistency",
+                                "Nullability / missing values",
+                                "Naming consistency",
+                                "Struktur object / nested",
+                                "Constraint implicit (unik, relasi, dll)"
+                        ),
+                        "expected_output", Map.of(
+                                "data_role_identification", Map.of(
+                                        "existing_state", "Data kondisi saat ini",
+                                        "incoming_data", "Data baru"
+                                ),
+                                "summary", "Ringkasan hasil analisis",
+                                "field_level_analysis", List.of(
+                                        Map.of(
+                                                "field_name", "Nama field",
+                                                "issue_type", "Jenis masalah (missing, type mismatch, dll)",
+                                                "description", "Penjelasan detail",
+                                                "location", "Letak field dalam struktur data",
+                                                "suggestion", "Rekomendasi perbaikan"
+                                        )
+                                ),
+                                "structure_issues", List.of(
+                                        "Perbedaan struktur antar data"
+                                ),
+                                "key_findings", List.of("Insight penting"),
+                                "recommendations", List.of("Rekomendasi global"),
+                                "ambiguities", "Ambiguitas jika ada"
                         ),
                         "data", parsed
                 )
