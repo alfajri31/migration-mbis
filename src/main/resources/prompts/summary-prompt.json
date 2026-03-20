@@ -1,0 +1,36 @@
+{
+  "task": "FE to BE Field Mapping and Missing Data Analysis",
+  "instruction": "Analyze frontend (FE) data and backend (database) schema/data. Identify empty fields in FE, then determine whether corresponding data exists in the database. Provide mapping recommendations from FE fields to the most relevant database columns.",
+  "rules": [
+    "1. Focus ONLY on FE fields that are empty (null, empty string, or missing).",
+    "2. For each empty FE field, search for relevant columns in the database.",
+    "3. Match fields based on name similarity, semantic meaning, or data patterns.",
+    "4. Do NOT assume data if it does not clearly exist in the database.",
+    "5. If multiple candidate columns exist, list all with confidence levels.",
+    "6. If no mapping is found, return 'not_found'.",
+    "7. Do NOT hallucinate or invent fields.",
+    "8. Prioritize: exact match > name similarity > semantic similarity.",
+    "9. Consider Indonesian-English synonyms (e.g., 'nama' = 'name')."
+  ],
+  "analysis_focus": [
+    "Detection of empty FE fields",
+    "DB column existence",
+    "Field name similarity",
+    "Semantic matching",
+    "Data availability in DB",
+    "Mapping confidence"
+  ],
+  "expected_output": {
+    "summary": "Summary of total empty FE fields and how many are mapped",
+    "mappings": [
+      {
+        "fe_field": "string",
+        "status": "mapped | multiple_candidates | not_found",
+        "recommended_be_column": "string or null",
+        "alternative_columns": ["string"],
+        "confidence": "high | medium | low",
+        "notes": "reason for the mapping recommendation"
+      }
+    ]
+  }
+}

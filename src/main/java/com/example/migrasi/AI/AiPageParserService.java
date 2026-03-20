@@ -1,8 +1,10 @@
 package com.example.migrasi.AI;
 
+import com.example.migrasi.prompt.PromptLoader;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -22,14 +24,11 @@ public class AiPageParserService {
     @Value("${ai.model.picture}")
     private String aiModel;
 
-    @Value("${prompt.user.picture}")
-    private String promptUser;
-
-    @Value("${system.feedback.picture}")
-    private String systemFeedback;
-
     @Value("${agent.host.url}")
     private String url;
+
+    @Autowired
+    private PromptLoader promptLoader;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -37,13 +36,25 @@ public class AiPageParserService {
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
+        Map<String, Object> prompt = promptLoader.loadPrompt("image-prompt.json");
+
+        // ambil system.feedback.picture
+        Map<String, Object> system = (Map<String, Object>) prompt.get("system");
+        Map<String, Object> feedback = (Map<String, Object>) system.get("feedback");
+        String systemFeedback = (String) feedback.get("picture");
+
+        // ambil prompt.user.picture
+        Map<String, Object> promptMap = (Map<String, Object>) prompt.get("prompt");
+        Map<String, Object> user = (Map<String, Object>) promptMap.get("user");
+        String promptUser = (String) user.get("picture");
+
         // system message
         messages.add(Map.of(
                 "role", "system",
                 "content", systemFeedback
         ));
 
-        // user message (WITH IMAGE)
+            // user message (WITH IMAGE)
         Map<String, Object> userMessage = new HashMap<>();
         userMessage.put("role", "user");
         userMessage.put("content", promptUser);
