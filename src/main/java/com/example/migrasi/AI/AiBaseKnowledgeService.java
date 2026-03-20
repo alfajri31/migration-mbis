@@ -1,6 +1,5 @@
 package com.example.migrasi.AI;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,15 +33,18 @@ public class AiBaseKnowledgeService {
     @Value("${ai.context.max.prompt.words}")
     private int maxWords;
 
-    private final String reduceUserPrompt="Gabungkan seluruh hasil analisis mengenai kekurangan. Gunakan bahasa Indonesia dan buat deskripsi singkat, jelas, serta terstruktur.";
+    private final String reduceUserPrompt = "Rules summary: " +
+                            "1. Gunakan bahasa Indonesia." +
+                            "2. Buat deskripsi yang jelas, dan terstruktur dalam bentuk poin-poin. " +
+                            "3. Fokus pada perbaikan" +
+                            "4. Gabungkan seluruh hasil analisis mengenai kekurangan. \" +\n" +
+                            "5. Data terdapat pada bagian akhir prompt ini: ";
 
     private final RestTemplate restTemplate = new RestTemplate();
 
     public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
 
         int safeContextWindow = contextWindow - 500;
-//
-//        Map<String, List<String>> chunkedData = chunkedBySize(data, safeContextWindow);
 
         int totalChunkCounts = 0;
 
@@ -53,7 +55,7 @@ public class AiBaseKnowledgeService {
         int estimationSummaryTokens = totalChunkCounts * (maxWords * 3);
 
         if (estimationSummaryTokens >= safeContextWindow) {
-            log.warn("Skip reduce: estimasi token will be overflow");
+            log.warn("Can't be proceed: tokens will be overflow");
             return;
         }
 
@@ -64,8 +66,6 @@ public class AiBaseKnowledgeService {
         log.info("START MAP PHASE (per chunk processing)");
 
         int index=0;
-
-        int subIndex=0;
 
         for (Map.Entry<String, List<String>> entry : data.entrySet()) {
 
@@ -87,37 +87,10 @@ public class AiBaseKnowledgeService {
                 if (estimatedTokens > safeContextWindow) {
                     log.warn("Chunk over context window, splitting... tokens={} SKIP! I assume this only data insert remnants", estimatedTokens);
                     continue;
-//                    subIndex=0;
-//
-//                    log.warn("Chunk over context window, splitting... tokens={}", estimatedTokens);
-//
-//                    List<String> safeChunks = splitByTokenSafe(jsonChunk);
-//
-//                    for (String safeChunk : safeChunks) {
-//
-//                        String prompt = buildUserPrompt() + ": " + safeChunk;
-//
-//                        String result = callAI(key, prompt, index, safeChunks.size());
-//
-//                        partialSummaries.add(result);
-//
-//                        subIndex++;
-//
-//                        log.info("response complete chunk at index - {} sub-index {} of safe chunks {}", index,subIndex,safeChunks.size()-1);
-//
-//                    }
 
                 } else {
-
-                    String prompt = buildUserPrompt()+ ": " + jsonChunk;
-
-                    String result = callAI(key, prompt, index, chunks.size());
-
-                    partialSummaries.add(result);
+                    partialSummaries.add(jsonChunk);
                 }
-
-                log.info("response complete chunk at index - {} sub-index {} of {}", index,subIndex,totalChunkCounts);
-
                 index++;
             }
         }
@@ -126,75 +99,56 @@ public class AiBaseKnowledgeService {
 
         mapper = new ObjectMapper();
 
-        String combinedSummary = mapper.writeValueAsString(partialSummaries);
+        ObjectMapper finalMapper = mapper;
 
-        String reducePrompt = reduceUserPrompt + combinedSummary;
+        List<Object> parsed = partialSummaries.stream()
+                .map(s -> {
+                    try {
+                        return finalMapper.readValue(s, Object.class);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .toList();
 
-        String finalResult = callAISummary(reducePrompt,index, data.size());
+        String reducePrompt = mapper.writeValueAsString(
+                Map.of(
+                        "task", "Kesimpulan",
+                        "instruction", "Gabungkan seluruh hasil pada objek 'data' dan 'KEY'. Buatkan hasil analisis serta FOKUS pada perbaikan",
+                        "rules", List.of(
+                                "1. items di object data saling berkaitan contoh 'database' adalah 'KEY' artinya ini relevansi database yang sedang berjalan saat ini",
+                                "2. Gunakan bahasa Indonesia untuk menjawab",
+                                "3. Fokus pada insight penting",
+                                "4. Jelaskan jika ada ambiguitas dalam section khusus",
+                                "4. Fokus pada perbaikan"
+                        ),
+                        "data", parsed
+                )
+        );
+
+        String finalResult = callSummary(reducePrompt,index, data.size());
 
         log.info("FINAL RESULT:\n{}", finalResult);
 
         saveToFile(finalResult);
     }
 
-    private String callAI(String key,String userPrompt,int chunkIndex,int totalChunkSize) {
+    private String callSummary(String reducePrompt,int chunkIndex,int totalChunkSize) {
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
         messages.add(Map.of(
                 "role", "system",
-                "content", key+": "+buildSystemPrompt()
+                "content",
+                "Anda adalah asisten analisis untuk pekerjaan saya. " +
+                        "Berikan informasi secara faktual dan terstruktur. " +
+                        "Gunakan bahasa Indonesia formal. " +
+                        "Dilarang menambahkan informasi di luar input."
         ));
 
         messages.add(Map.of(
                 "role", "user",
-                "content", userPrompt
-        ));
-
-        Map<String, Object> request = new HashMap<>();
-
-        request.put("options", Map.of(
-                "temperature", 0,
-                "keep_alive",0
-        ));
-
-        request.put("model", aiModel);
-        request.put("messages", messages);
-        request.put("stream", false);
-
-        try {
-
-            log.info("request chunk at index - {} of {}", chunkIndex,totalChunkSize);
-
-            ResponseEntity<Map> response =
-                    restTemplate.postForEntity(url, request, Map.class);
-
-            Map body = response.getBody();
-
-            Map message = (Map) body.get("message");
-
-            return message.get("content").toString();
-
-        } catch (Exception e) {
-
-            log.error("Error callAI: {}", e.getMessage());
-
-            return "ERROR: " + e.getMessage();
-        }
-    }
-
-    private String callAISummary(String userPrompt,int chunkIndex,int totalChunkSize) {
-
-        List<Map<String, Object>> messages = new ArrayList<>();
-
-        messages.add(Map.of(
-                "role", "system",
-                "content", "Ringkas teks menjadi singkat, utuh, dan jelas. Ambil poin utama saja."
-        ));
-
-        messages.add(Map.of(
-                "role", "user",
-                "content", userPrompt
+                "content", reducePrompt
         ));
 
         Map<String, Object> request = new HashMap<>();
@@ -222,68 +176,6 @@ public class AiBaseKnowledgeService {
             log.error("Error callAI: {}", e.getMessage());
             return "ERROR: " + e.getMessage();
         }
-    }
-
-    public Map<String, List<String>> chunkedBySize(Map<String, List<String>> data, int maxLength)
-            throws JsonProcessingException {
-
-        ObjectMapper mapper = new ObjectMapper();
-
-        Map<String, List<String>> result = new HashMap<>();
-
-        for (Map.Entry<String, List<String>> entry : data.entrySet()) {
-
-            String key = entry.getKey();
-
-            List<String> list = entry.getValue();
-
-            List<String> chunks = new ArrayList<>();
-
-            StringBuilder current = new StringBuilder();
-
-            for (String item : list) {
-
-                String minified = mapper.writeValueAsString(
-                        mapper.readTree(item)
-                );
-
-                // kalau item sendiri lebih besar
-                if (minified.length() > maxLength) {
-
-                    if (!current.isEmpty()) {
-
-                        chunks.add(current.toString());
-
-                        current = new StringBuilder();
-                    }
-
-                    chunks.add(minified);
-
-                    continue;
-                }
-
-                if (current.length() + minified.length() + 1 > maxLength) {
-                    if (!current.isEmpty()) {
-                        chunks.add(current.toString());
-                        current = new StringBuilder();
-                    }
-                }
-
-                if (!current.isEmpty()) {
-                    current.append(",");
-                }
-
-                current.append(minified);
-            }
-
-            if (!current.isEmpty()) {
-                chunks.add(current.toString());
-            }
-
-            result.put(key, chunks);
-        }
-
-        return result;
     }
 
     public int estimateTokens(String text) {
@@ -316,37 +208,9 @@ public class AiBaseKnowledgeService {
         System.out.println("File saved: " + filePath.toAbsolutePath());
     }
 
-    private List<String> splitByTokenSafe(String text) {
-
-        List<String> results = new ArrayList<>();
-
-        int estimatedTokens = estimateTokens(text);
-
-        if (estimatedTokens <= contextWindow) {
-            results.add(text);
-            return results;
-        }
-
-        // split jadi 2 (bisa juga 3 atau dynamic)
-        int mid = text.length() / 2;
-
-        String part1 = text.substring(0, mid);
-        String part2 = text.substring(mid);
-
-        results.addAll(splitByTokenSafe(part1));
-        results.addAll(splitByTokenSafe(part2));
-
-        return results;
-    }
-
-    private String buildUserPrompt() {
-        return "Jelaskan kekurangan ringkas berdasarkan skema data yang diberikan (maks:"
-                + maxWords + " kata): ";
-    }
-
     private String buildSystemPrompt() {
         return "Jawaban maksimal "
-                + maxWords + "Jelaskan dengan maksimal kata 200 character, dan menggunakan bahasa indonesia.";
+                + maxWords + "menggunakan bahasa indonesia.";
     }
 
 }
