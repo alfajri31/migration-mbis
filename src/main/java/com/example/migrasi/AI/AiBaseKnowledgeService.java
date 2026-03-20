@@ -31,12 +31,10 @@ public class AiBaseKnowledgeService {
 
     @Value("${ai.context.base.knowledge}")
     private int contextWindow;
-
-    private final String userPrompt="Berikan penjelasan singkat dari potongan data berikut (maks:200 kata). Data: ";
+    @Value("${ai.context.max.prompt.words}")
+    private int maxWords;
 
     private final String reduceUserPrompt="Berikan summary perbaikannya secara keseluruhan. Data: ";
-
-    private final String systemFeedback="Saya akan jawab maksimal 200 kata saja";
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -45,6 +43,19 @@ public class AiBaseKnowledgeService {
         int safeContextWindow = contextWindow - 500;
 
         Map<String, List<String>> chunkedData = chunkedBySize(data, 1000);
+
+        int totalChunkCounts = 0;
+
+        for (List<String> list : chunkedData.values()) {
+            totalChunkCounts += list.size();
+        }
+
+        int estimationSummaryTokens = totalChunkCounts * (maxWords * 3);
+
+        if (estimationSummaryTokens >= safeContextWindow) {
+            log.warn("Skip reduce: estimasi token overflow");
+            return;
+        }
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -79,7 +90,7 @@ public class AiBaseKnowledgeService {
 
                     for (String safeChunk : safeChunks) {
 
-                        String prompt = userPrompt + ": " + safeChunk;
+                        String prompt = buildUserPrompt() + ": " + safeChunk;
 
                         String result = callAI(key, prompt, index, safeChunks.size());
 
@@ -89,7 +100,7 @@ public class AiBaseKnowledgeService {
 
                 } else {
 
-                    String prompt = userPrompt + ": " + jsonChunk;
+                    String prompt = buildUserPrompt()+ ": " + jsonChunk;
 
                     String result = callAI(key, prompt, index, chunks.size());
 
@@ -121,7 +132,7 @@ public class AiBaseKnowledgeService {
 
         messages.add(Map.of(
                 "role", "system",
-                "content", key+": "+systemFeedback
+                "content", key+": "+buildSystemPrompt()
         ));
 
         messages.add(Map.of(
@@ -132,8 +143,7 @@ public class AiBaseKnowledgeService {
         Map<String, Object> request = new HashMap<>();
 
         request.put("options", Map.of(
-                "temperature", 0,
-                "keep_alive", "2m"
+                "temperature", 0
         ));
 
         request.put("model", aiModel);
@@ -174,11 +184,6 @@ public class AiBaseKnowledgeService {
         ));
 
         Map<String, Object> request = new HashMap<>();
-
-        request.put("options", Map.of(
-                //set to 0 after request no memory
-                "keep_alive", "2m"
-        ));
 
         request.put("model", aiModel);
 
@@ -318,6 +323,16 @@ public class AiBaseKnowledgeService {
         results.addAll(splitByTokenSafe(part2));
 
         return results;
+    }
+
+    private String buildUserPrompt() {
+        return "Berikan penjelasan singkat dari potongan data berikut (maks:"
+                + maxWords + " kata). Data ";
+    }
+
+    private String buildSystemPrompt() {
+        return "Jawaban WAJIB maksimal "
+                + maxWords + " kata. Jika lebih, ringkas ulang. Jangan tampilkan reasoning.";
     }
 
 }
