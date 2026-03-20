@@ -29,7 +29,7 @@ public class AiBaseKnowledgeService {
     @Value("${ai.model.base.knowledge}")
     private String aiModel;
 
-    @Value("${ai.context.base.knowledge}")
+    @Value("${ai.model.context.base.knowledge}")
     private int contextWindow;
     @Value("${ai.context.max.prompt.words}")
     private int maxWords;
@@ -42,7 +42,9 @@ public class AiBaseKnowledgeService {
 
         int safeContextWindow = contextWindow - 500;
 
-        Map<String, List<String>> chunkedData = chunkedBySize(data, 1000);
+        int batchSize = 1000;
+
+        Map<String, List<String>> chunkedData = chunkedBySize(data, batchSize);
 
         int totalChunkCounts = 0;
 
@@ -53,7 +55,7 @@ public class AiBaseKnowledgeService {
         int estimationSummaryTokens = totalChunkCounts * (maxWords * 3);
 
         if (estimationSummaryTokens >= safeContextWindow) {
-            log.warn("Skip reduce: estimasi token overflow");
+            log.warn("Skip reduce: estimasi token will be overflow");
             return;
         }
 
@@ -64,6 +66,8 @@ public class AiBaseKnowledgeService {
         log.info("START MAP PHASE (per chunk processing)");
 
         int index=0;
+
+        int subIndex=0;
 
         for (Map.Entry<String, List<String>> entry : chunkedData.entrySet()) {
 
@@ -84,6 +88,8 @@ public class AiBaseKnowledgeService {
 
                 if (estimatedTokens > safeContextWindow) {
 
+                    subIndex=0;
+
                     log.warn("Chunk over context window, splitting... tokens={}", estimatedTokens);
 
                     List<String> safeChunks = splitByTokenSafe(jsonChunk);
@@ -96,6 +102,10 @@ public class AiBaseKnowledgeService {
 
                         partialSummaries.add(result);
 
+                        subIndex++;
+
+                        log.info("response complete chunk at index - {} sub-index {} of safe chunks {}", index,subIndex,safeChunks.size()-1);
+
                     }
 
                 } else {
@@ -106,6 +116,8 @@ public class AiBaseKnowledgeService {
 
                     partialSummaries.add(result);
                 }
+
+                log.info("response complete chunk at index - {} sub-index {} of {}", index,subIndex,totalChunkCounts);
 
                 index++;
             }
@@ -158,8 +170,6 @@ public class AiBaseKnowledgeService {
             Map body = response.getBody();
 
             Map message = (Map) body.get("message");
-
-            log.info("response complete chunk at index - {} of {}", chunkIndex,totalChunkSize);
 
             return message.get("content").toString();
 
