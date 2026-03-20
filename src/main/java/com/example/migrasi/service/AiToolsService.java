@@ -27,8 +27,8 @@ public class AiToolsService {
 
         HashMap<String,List<String>> map = new HashMap<>();
 
-        map.put("ini database saya", addDetailsKnowledge(jsonString));
-        map.put("ada field kosong di gambar tolong bantu field mana yang belum tersimpan ke db saya",addImagesKnowledges());
+        map.put("BE", addDetailsKnowledge(jsonString));
+        map.put("FE",addImagesKnowledges());
 
         basesKnowledge.putAll(map);
 

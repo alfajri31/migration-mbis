@@ -1,35 +1,40 @@
 {
   "task": "FE to BE Field Mapping and Missing Data Analysis",
-  "instruction": "Analyze frontend (FE) data and backend (database) schema/data. Identify empty fields in FE, then determine whether corresponding data exists in the database. Provide mapping recommendations from FE fields to the most relevant database columns.",
+  "instruction": "Analyze frontend (FE) data and backend (database) schema/data using available relation schemas (rel_fe, rel_be, rel_*). Identify empty fields in FE (null, empty, or missing), then trace each field through existing relations to determine whether: (1) the corresponding BE column exists but contains no data, (2) the mapping between FE and BE fields is not defined in the relation schema, or (3) no relevant BE column exists at all. Provide mapping recommendations and clearly indicate whether the issue is missing data or missing mapping.",
   "rules": [
     "1. Focus ONLY on FE fields that are empty (null, empty string, or missing).",
-    "2. For each empty FE field, search for relevant columns in the database.",
-    "3. Match fields based on name similarity, semantic meaning, or data patterns.",
-    "4. Do NOT assume data if it does not clearly exist in the database.",
-    "5. If multiple candidate columns exist, list all with confidence levels.",
-    "6. If no mapping is found, return 'not_found'.",
-    "7. Do NOT hallucinate or invent fields.",
-    "8. Prioritize: exact match > name similarity > semantic similarity.",
-    "9. Consider Indonesian-English synonyms (e.g., 'nama' = 'name')."
+    "2. Use rel_fe, rel_be, and rel_* schemas as the primary reference for mapping.",
+    "3. For each empty FE field, first check if a mapping exists in rel_ schema.",
+    "4. If mapping exists, verify whether the corresponding BE column contains data.",
+    "5. If mapping does NOT exist, attempt to find candidate BE columns based on similarity.",
+    "6. Clearly distinguish between: missing data (BE exists but empty) and missing mapping (relation not defined).",
+    "7. Do NOT assume data if it does not clearly exist in the database.",
+    "8. If multiple candidate columns exist, list all with confidence levels.",
+    "9. If no mapping or candidate is found, return 'not_found'.",
+    "10. Do NOT hallucinate or invent fields.",
+    "11. Prioritize: exact match > relation schema > name similarity > semantic similarity.",
+    "12. Consider Indonesian-English synonyms (e.g., 'nama' = 'name')."
   ],
   "analysis_focus": [
     "Detection of empty FE fields",
+    "Relation schema validation (rel_fe, rel_be)",
+    "Mapping existence vs missing mapping",
     "DB column existence",
+    "Data availability in BE",
     "Field name similarity",
     "Semantic matching",
-    "Data availability in DB",
     "Mapping confidence"
   ],
   "expected_output": {
-    "summary": "Summary of total empty FE fields and how many are mapped",
+    "summary": "Summary of total empty FE fields, how many have mappings, how many are missing in BE data, and how many have no mapping defined",
     "mappings": [
       {
         "fe_field": "string",
-        "status": "mapped | multiple_candidates | not_found",
+        "status": "mapped | multiple_candidates | not_found | missing_mapping | missing_data",
         "recommended_be_column": "string or null",
         "alternative_columns": ["string"],
         "confidence": "high | medium | low",
-        "notes": "reason for the mapping recommendation"
+        "notes": "reason for the mapping recommendation, including whether issue is missing data or missing relation"
       }
     ]
   }
