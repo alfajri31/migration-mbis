@@ -1,65 +1,12 @@
 {
-  "task": "FE to BE Field Mapping, Missing Data Resolution, and Ambiguity Analysis",
-  "instruction": "Analyze frontend (FE) data and backend (database) schema/data using relation sources: rel_fe (FE-to-BE mapping), rel_be (existing BE schema), and rel_candidate (mapping from legacy/old data to current schema). Identify empty fields in FE (null, empty, or missing), then determine the correct backend (BE) storage. For each empty FE field, check rel_fe for existing mappings, validate against rel_be for actual columns and data, and use rel_candidate as a fallback to trace whether the data previously existed under a different schema or naming. Determine whether the issue is missing data, missing mapping, missing schema, or legacy mapping mismatch. Also detect ambiguities where a FE field may correspond to multiple BE columns across different tables or contexts.",
+  "task": "FE-to-BE Field Mapping, Missing Data Resolution, and Ambiguity Analysis",
+  "instruction": "Analyze frontend (FE) data against backend (BE) schema and data using the following relation sources: rel_fe (FE-to-BE mapping), rel_be (existing BE schema), and rel_candidate (legacy-to-current schema mapping). Identify missing, null, or empty values, and resolve any mapping ambiguities.",
   "rules": [
-    "1. Focus ONLY on FE fields that are empty (null, empty string, or missing).",
-    "2. Use rel_fe as the primary mapping reference.",
-    "3. Validate mapped columns against rel_be to ensure the column exists and check data availability.",
-    "4. If mapping exists but data is empty → classify as missing_data.",
-    "5. If column exists in rel_be but not mapped in rel_fe → classify as missing_mapping.",
-    "6. If no mapping is found in rel_fe, check rel_candidate to identify legacy mappings.",
-    "7. If legacy mapping exists, recommend the corresponding BE column and mark as legacy_mapping_candidate.",
-    "8. If no suitable column exists in rel_be or rel_candidate → classify as missing_schema.",
-    "9. If no mapping or candidate is found at all → return not_found.",
-    "10. Do NOT assume data if it does not clearly exist in the database.",
-    "11. If multiple candidate columns exist, list all with confidence levels.",
-    "12. Do NOT hallucinate or invent fields beyond rel_be and rel_candidate.",
-    "13. Prioritize: rel_fe mapping > rel_be exact match > rel_candidate > name similarity > semantic similarity.",
-    "14. Consider Indonesian-English synonyms (e.g., 'nama' = 'name', 'alamat' = 'address').",
-    "15. Detect ambiguity when a FE field maps to multiple BE columns across different tables or contexts.",
-    "16. Do NOT auto-resolve ambiguity; report all possible mappings."
-  ],
-  "analysis_focus": [
-    "Detection of empty FE fields",
-    "rel_fe mapping validation",
-    "rel_be schema and data validation",
-    "rel_candidate legacy mapping tracing",
-    "Missing data vs missing mapping vs missing schema vs legacy mismatch",
-    "Field name similarity",
-    "Semantic matching",
-    "Cross-table ambiguity detection",
-    "Context mismatch between FE and BE",
-    "Mapping confidence scoring"
-  ],
-  "expected_output": {
-    "summary": "Summary of empty FE fields, including counts of mapped, missing_data, missing_mapping, missing_schema, legacy_mapping_candidate, and ambiguous cases",
-    "mappings": [
-      {
-        "fe_field": "string",
-        "status": "mapped | missing_data | missing_mapping | missing_schema | legacy_mapping_candidate | multiple_candidates | not_found",
-        "recommended_be_column": "string or null",
-        "recommended_table": "string or null",
-        "alternative_columns": ["string"],
-        "source": "rel_fe | rel_be | rel_candidate",
-        "confidence": "high | medium | low",
-        "notes": "Explanation of decision, including whether issue is missing data, mapping, schema, or legacy mismatch"
-      }
-    ],
-    "ambiguities": [
-      {
-        "fe_field": "string",
-        "candidate_mappings": [
-          {
-            "be_column": "string",
-            "table": "string",
-            "source": "rel_be | rel_candidate",
-            "context": "string",
-            "confidence": "high | medium | low"
-          }
-        ],
-        "ambiguity_type": "cross_table | cross_context | semantic_overlap | legacy_conflict",
-        "notes": "Explanation of ambiguity, including possible conflict between current schema and legacy mapping"
-      }
-    ]
-  }
+    "1. ONLY analyze fields with null, empty string, or missing values.",
+    "2. ALWAYS use rel_fe, rel_be, and rel_candidate as the primary reference sources for cross-analysis.",
+    "3. PRIORITIZE actionable solutions to resolve ambiguity or missing mappings.",
+    "4. IF any ambiguity or missing integration is found, present the result in table format (NOT bullet points).",
+    "5. ENSURE mapping consistency between FE and BE fields.",
+    "6. HIGHLIGHT conflicts between rel_fe and rel_candidate mappings if they exist."
+  ]
 }

@@ -146,13 +146,8 @@ public class AiBaseKnowledgeService {
 
         messages.add(Map.of(
                 "role", "system",
-                "content",
-                "Anda adalah asisten analisis untuk pekerjaan saya. " +
-                        "Berikan informasi secara faktual dan terstruktur. " +
-                        "Gunakan bahasa Indonesia formal. " +
-                        "Dilarang menambahkan informasi di luar input."
+                "content", "Always present analysis results in table format when identifying problems or ambiguities."
         ));
-
         messages.add(Map.of(
                 "role", "user",
                 "content", reducePrompt
