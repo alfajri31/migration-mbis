@@ -23,30 +23,28 @@ import java.util.Map;
 @Slf4j
 public class AiBaseKnowledgeService {
 
-    @Value("${ai.model.base.knowledge}")
-    private String aiModel;
-
-    @Value("${prompt.user.base.knowledge}")
-    private String userPrompt;
-
-    @Value("${prompt.user.base.knowledge.reduce}")
-    private String reduceUserPrompt;
-
-
-    @Value("${system.feedback.base.knowledge}")
-    private String systemFeedback;
-
     @Value("${agent.host.url}")
     private String url;
 
+    @Value("${ai.model.base.knowledge}")
+    private String aiModel;
 
+    @Value("${ai.context.base.knowledge}")
+    private int contextWindow;
+
+    private final String userPrompt="Berikan penjelasan singkat dari potongan data berikut (maks:200 kata). Data: ";
+
+    private final String reduceUserPrompt="Berikan summary perbaikannya secara keseluruhan. Data: ";
+
+    private final String systemFeedback="Saya akan jawab maksimal 200 kata saja";
 
     private final RestTemplate restTemplate = new RestTemplate();
 
     public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
 
-        // chunk by character string
-        Map<String, List<String>> chunkedData = chunkByLengthSize(data, 2000);
+        int safeContextWindow = contextWindow - 500;
+
+        Map<String, List<String>> chunkedData = chunkedBySize(data, 1000);
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -61,7 +59,7 @@ public class AiBaseKnowledgeService {
             String key = entry.getKey();
             List<String> chunks = entry.getValue();
 
-            log.info("total all size chunks {} ",chunks.size());
+            log.info("total all size chunks: {} ",chunks.size());
 
             for (String chunk : chunks) {
 
@@ -71,15 +69,34 @@ public class AiBaseKnowledgeService {
 
                 int estimatedTokens = estimateTokens(jsonChunk);
 
-                log.info("Chunk [{}] tokens: {}", key, estimatedTokens);
+                log.warn("Chunk tokens={}", estimatedTokens);
 
-                String prompt = userPrompt + ": " + jsonChunk;
+                if (estimatedTokens > safeContextWindow) {
 
-                String result = callAI(key,prompt,index,chunks.size());
+                    log.warn("Chunk over context window, splitting... tokens={}", estimatedTokens);
 
-                partialSummaries.add(result);
+                    List<String> safeChunks = splitByTokenSafe(jsonChunk);
 
-                index+=1;
+                    for (String safeChunk : safeChunks) {
+
+                        String prompt = userPrompt + ": " + safeChunk;
+
+                        String result = callAI(key, prompt, index, safeChunks.size());
+
+                        partialSummaries.add(result);
+
+                    }
+
+                } else {
+
+                    String prompt = userPrompt + ": " + jsonChunk;
+
+                    String result = callAI(key, prompt, index, chunks.size());
+
+                    partialSummaries.add(result);
+                }
+
+                index++;
             }
         }
 
@@ -91,7 +108,7 @@ public class AiBaseKnowledgeService {
 
         String reducePrompt = reduceUserPrompt + combinedSummary;
 
-        String finalResult = callAISummary("summary",reducePrompt,index, chunkedData.size());
+        String finalResult = callAISummary(reducePrompt,index, chunkedData.size());
 
         log.info("FINAL RESULT:\n{}", finalResult);
 
@@ -104,7 +121,7 @@ public class AiBaseKnowledgeService {
 
         messages.add(Map.of(
                 "role", "system",
-                "content", "pembahasan seputar "+key+", "+systemFeedback
+                "content", key+": "+systemFeedback
         ));
 
         messages.add(Map.of(
@@ -115,10 +132,8 @@ public class AiBaseKnowledgeService {
         Map<String, Object> request = new HashMap<>();
 
         request.put("options", Map.of(
-                //num_predict -> set maximum character token in first place request
-                "num_predict", 200,
-                //set to 0 after request no memory
-                "keep_alive", "0"
+                "temperature", 0,
+                "keep_alive", "2m"
         ));
 
         request.put("model", aiModel);
@@ -144,13 +159,13 @@ public class AiBaseKnowledgeService {
         }
     }
 
-    private String callAISummary(String key,String userPrompt,int chunkIndex,int totalChunkSize) {
+    private String callAISummary(String userPrompt,int chunkIndex,int totalChunkSize) {
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
         messages.add(Map.of(
                 "role", "system",
-                "content", "pembahasan seputar kekurangannya "+key
+                "content", "Ringkas teks menjadi singkat, utuh, dan jelas. Ambil poin utama saja."
         ));
 
         messages.add(Map.of(
@@ -162,11 +177,13 @@ public class AiBaseKnowledgeService {
 
         request.put("options", Map.of(
                 //set to 0 after request no memory
-                "keep_alive", "0"
+                "keep_alive", "2m"
         ));
 
         request.put("model", aiModel);
+
         request.put("messages", messages);
+
         request.put("stream", false);
 
         try {
@@ -188,7 +205,7 @@ public class AiBaseKnowledgeService {
         }
     }
 
-    public Map<String, List<String>> chunkByLengthSize(Map<String, List<String>> data, int maxLength)
+    public Map<String, List<String>> chunkedBySize(Map<String, List<String>> data, int maxLength)
             throws JsonProcessingException {
 
         ObjectMapper mapper = new ObjectMapper();
@@ -253,7 +270,7 @@ public class AiBaseKnowledgeService {
     public int estimateTokens(String text) {
         if (text == null || text.isEmpty()) return 0;
 
-        return text.length() / 4;
+        return text.length() / 3;
     }
 
     private void saveToFile(String content) throws Exception {
@@ -280,36 +297,27 @@ public class AiBaseKnowledgeService {
         System.out.println("File saved: " + filePath.toAbsolutePath());
     }
 
+    private List<String> splitByTokenSafe(String text) {
 
-        private String extractJson(String text) {
+        List<String> results = new ArrayList<>();
 
-            String json="";
+        int estimatedTokens = estimateTokens(text);
 
-            try {
-                if (text == null || text.isEmpty()) {
-                    return null;
-                }
-
-                int start = text.indexOf("[");
-                int end = text.lastIndexOf("]");
-
-                if (start == -1 || end == -1 || end <= start) {
-                    return null;
-                }
-
-                json = text.substring(start, end + 1);
-
-                // normalize whitespace
-                json = json.replaceAll("[\\r\\n\\t]", " ").trim();
-
-                // remove trailing comma
-                json = json.replaceAll(",\\s*]", "]");
-            }
-            catch (Exception e) {
-                log.info("error parser occurred {}", e.getMessage());
-            }
-
-            return json;
+        if (estimatedTokens <= contextWindow) {
+            results.add(text);
+            return results;
         }
+
+        // split jadi 2 (bisa juga 3 atau dynamic)
+        int mid = text.length() / 2;
+
+        String part1 = text.substring(0, mid);
+        String part2 = text.substring(mid);
+
+        results.addAll(splitByTokenSafe(part1));
+        results.addAll(splitByTokenSafe(part2));
+
+        return results;
+    }
 
 }

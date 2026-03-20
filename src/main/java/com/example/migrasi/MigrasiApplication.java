@@ -1,6 +1,7 @@
 package com.example.migrasi;
 
 import com.example.migrasi.AI.AiBaseKnowledgeService;
+import com.example.migrasi.AI.AiPageParserService;
 import com.example.migrasi.service.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -38,6 +39,7 @@ public class MigrasiApplication implements CommandLineRunner {
     private final PostalCodeMigration postalCodeMigration;
     private final DatabaseExportService databaseExportService;
     private final AiBaseKnowledgeService aiBaseKnowledgeService;
+    private final AiPageParserService aiPageParserService;
     private List<String> detailsKnowledge;
     private Map<String,List<String>> basesKnowledge;
 
