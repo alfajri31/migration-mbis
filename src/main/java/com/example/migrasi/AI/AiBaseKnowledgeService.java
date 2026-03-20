@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -34,6 +35,17 @@ public class AiBaseKnowledgeService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
+
+        data = data.entrySet()
+                .stream()
+                .collect(Collectors.toMap(
+                        entry -> "rel_" + entry.getKey()
+                                .toLowerCase()
+                                .trim()
+                                .replaceAll("\\s+", "_"),
+                        Map.Entry::getValue,
+                        (a, b) -> a // handle duplicate
+                ));
 
         int safeContextWindow = contextWindow - 500;
 
