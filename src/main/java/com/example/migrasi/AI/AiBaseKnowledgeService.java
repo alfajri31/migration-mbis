@@ -33,13 +33,6 @@ public class AiBaseKnowledgeService {
     @Value("${ai.context.max.prompt.words}")
     private int maxWords;
 
-    private final String reduceUserPrompt = "Rules summary: " +
-                            "1. Gunakan bahasa Indonesia." +
-                            "2. Buat deskripsi yang jelas, dan terstruktur dalam bentuk poin-poin. " +
-                            "3. Fokus pada perbaikan" +
-                            "4. Gabungkan seluruh hasil analisis mengenai kekurangan. \" +\n" +
-                            "5. Data terdapat pada bagian akhir prompt ini: ";
-
     private final RestTemplate restTemplate = new RestTemplate();
 
     public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
@@ -114,10 +107,10 @@ public class AiBaseKnowledgeService {
         String reducePrompt = mapper.writeValueAsString(
                 Map.of(
                         "task", "Kesimpulan",
-                        "instruction", "Gabungkan seluruh hasil pada objek 'data' dan 'KEY'. Buatkan hasil analisis serta FOKUS pada perbaikan",
+                        "instruction", "Gabungkan seluruh hasil Buatkan hasil analisis serta FOKUS pada perbaikan",
                         "rules", List.of(
-                                "1. items di object data saling berkaitan contoh 'database' adalah 'KEY' artinya ini relevansi database yang sedang berjalan saat ini",
-                                "2. Gunakan bahasa Indonesia untuk menjawab",
+                                "1. Data saling berkaitan contoh 'database_key' artinya ini relevansi database yang sedang berjalan saat ini",
+                                "2. Gunakan bahasa Indonesia!",
                                 "3. Fokus pada insight penting",
                                 "4. Jelaskan jika ada ambiguitas dalam section khusus",
                                 "4. Fokus pada perbaikan"
