@@ -34,21 +34,19 @@ public class AiBaseKnowledgeService {
     @Value("${ai.context.max.prompt.words}")
     private int maxWords;
 
-    private final String reduceUserPrompt="Berikan summary perbaikannya secara keseluruhan. Data: ";
+    private final String reduceUserPrompt="Gabungkan seluruh hasil analisis mengenai kekurangan. Gunakan bahasa Indonesia dan buat deskripsi singkat, jelas, serta terstruktur.";
 
     private final RestTemplate restTemplate = new RestTemplate();
 
     public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
 
         int safeContextWindow = contextWindow - 500;
-
-        int batchSize = 1000;
-
-        Map<String, List<String>> chunkedData = chunkedBySize(data, batchSize);
+//
+//        Map<String, List<String>> chunkedData = chunkedBySize(data, safeContextWindow);
 
         int totalChunkCounts = 0;
 
-        for (List<String> list : chunkedData.values()) {
+        for (List<String> list : data.values()) {
             totalChunkCounts += list.size();
         }
 
@@ -69,7 +67,7 @@ public class AiBaseKnowledgeService {
 
         int subIndex=0;
 
-        for (Map.Entry<String, List<String>> entry : chunkedData.entrySet()) {
+        for (Map.Entry<String, List<String>> entry : data.entrySet()) {
 
             String key = entry.getKey();
             List<String> chunks = entry.getValue();
@@ -87,26 +85,27 @@ public class AiBaseKnowledgeService {
                 log.warn("Chunk tokens={}", estimatedTokens);
 
                 if (estimatedTokens > safeContextWindow) {
-
-                    subIndex=0;
-
-                    log.warn("Chunk over context window, splitting... tokens={}", estimatedTokens);
-
-                    List<String> safeChunks = splitByTokenSafe(jsonChunk);
-
-                    for (String safeChunk : safeChunks) {
-
-                        String prompt = buildUserPrompt() + ": " + safeChunk;
-
-                        String result = callAI(key, prompt, index, safeChunks.size());
-
-                        partialSummaries.add(result);
-
-                        subIndex++;
-
-                        log.info("response complete chunk at index - {} sub-index {} of safe chunks {}", index,subIndex,safeChunks.size()-1);
-
-                    }
+                    log.warn("Chunk over context window, splitting... tokens={} SKIP! I assume this only data insert remnants", estimatedTokens);
+                    continue;
+//                    subIndex=0;
+//
+//                    log.warn("Chunk over context window, splitting... tokens={}", estimatedTokens);
+//
+//                    List<String> safeChunks = splitByTokenSafe(jsonChunk);
+//
+//                    for (String safeChunk : safeChunks) {
+//
+//                        String prompt = buildUserPrompt() + ": " + safeChunk;
+//
+//                        String result = callAI(key, prompt, index, safeChunks.size());
+//
+//                        partialSummaries.add(result);
+//
+//                        subIndex++;
+//
+//                        log.info("response complete chunk at index - {} sub-index {} of safe chunks {}", index,subIndex,safeChunks.size()-1);
+//
+//                    }
 
                 } else {
 
@@ -131,7 +130,7 @@ public class AiBaseKnowledgeService {
 
         String reducePrompt = reduceUserPrompt + combinedSummary;
 
-        String finalResult = callAISummary(reducePrompt,index, chunkedData.size());
+        String finalResult = callAISummary(reducePrompt,index, data.size());
 
         log.info("FINAL RESULT:\n{}", finalResult);
 
@@ -155,7 +154,8 @@ public class AiBaseKnowledgeService {
         Map<String, Object> request = new HashMap<>();
 
         request.put("options", Map.of(
-                "temperature", 0
+                "temperature", 0,
+                "keep_alive",0
         ));
 
         request.put("model", aiModel);
@@ -163,6 +163,8 @@ public class AiBaseKnowledgeService {
         request.put("stream", false);
 
         try {
+
+            log.info("request chunk at index - {} of {}", chunkIndex,totalChunkSize);
 
             ResponseEntity<Map> response =
                     restTemplate.postForEntity(url, request, Map.class);
@@ -174,7 +176,9 @@ public class AiBaseKnowledgeService {
             return message.get("content").toString();
 
         } catch (Exception e) {
+
             log.error("Error callAI: {}", e.getMessage());
+
             return "ERROR: " + e.getMessage();
         }
     }
@@ -336,13 +340,13 @@ public class AiBaseKnowledgeService {
     }
 
     private String buildUserPrompt() {
-        return "Berikan penjelasan singkat dari potongan data berikut (maks:"
-                + maxWords + " kata). Data ";
+        return "Jelaskan kekurangan ringkas berdasarkan skema data yang diberikan (maks:"
+                + maxWords + " kata): ";
     }
 
     private String buildSystemPrompt() {
-        return "Jawaban WAJIB maksimal "
-                + maxWords + " kata. Jika lebih, ringkas ulang. Jangan tampilkan reasoning.";
+        return "Jawaban maksimal "
+                + maxWords + "Jelaskan dengan maksimal kata 200 character, dan menggunakan bahasa indonesia.";
     }
 
 }

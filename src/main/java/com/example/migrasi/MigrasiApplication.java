@@ -12,10 +12,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @SpringBootApplication
 @AllArgsConstructor
@@ -39,8 +36,6 @@ public class MigrasiApplication implements CommandLineRunner {
     private final PostalCodeMigration postalCodeMigration;
     private final DatabaseExportService databaseExportService;
     private final AiBaseKnowledgeService aiBaseKnowledgeService;
-    private final AiPageParserService aiPageParserService;
-    private List<String> detailsKnowledge;
     private Map<String,List<String>> basesKnowledge;
 
     public static void main(String[] args) {
@@ -128,6 +123,8 @@ public class MigrasiApplication implements CommandLineRunner {
 
         List<Map<String, Object>> list =
                 mapper.readValue(jsonString, new TypeReference<>() {});
+
+        List<String> detailsKnowledge = new ArrayList<>(); // ✅ LOCAL
 
         for (Map<String, Object> item : list) {
             detailsKnowledge.add(mapper.writeValueAsString(item));
