@@ -1,18 +1,11 @@
 package com.example.migrasi;
 
-import com.example.migrasi.AI.AiBaseKnowledgeService;
-import com.example.migrasi.AI.AiPageParserService;
 import com.example.migrasi.service.*;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-import java.util.*;
 
 @SpringBootApplication
 @AllArgsConstructor
@@ -20,8 +13,7 @@ import java.util.*;
 public class MigrasiApplication implements CommandLineRunner {
 
     private static final String[] MIGRATION_NAMES = {
-            ""
-
+            "ai"
     };
 
     private final SeedCustomerMigration seedCustomerMigration;
@@ -34,9 +26,7 @@ public class MigrasiApplication implements CommandLineRunner {
     private final DivisiMigration divisionMigration;
     private final KanwilMigration kanwilMigration;
     private final PostalCodeMigration postalCodeMigration;
-    private final DatabaseExportService databaseExportService;
-    private final AiBaseKnowledgeService aiBaseKnowledgeService;
-    private Map<String,List<String>> basesKnowledge;
+    private final AiToolsService aiToolsService;
 
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
@@ -44,16 +34,6 @@ public class MigrasiApplication implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-
-        String jsonString = databaseExportService.exportDatabase(Set.of("log_table"));
-
-        HashMap<String,List<String>> map = new HashMap<>();
-
-        map.put("database saya", addDetailsKnowledge(jsonString));
-
-        basesKnowledge.putAll(map);
-
-        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge);
 
         for (String migrationName : MIGRATION_NAMES) {
 
@@ -108,6 +88,11 @@ public class MigrasiApplication implements CommandLineRunner {
                     seedCustomerMigration.migrate();
                 }
 
+                case "ai" -> {
+                    log.info("Running AI Tools...");
+                    aiToolsService.sync();
+                }
+
                 default -> {
                     log.info("Unknown migration: {} ", migrationName);
                     throw new RuntimeException("Unknown migration");
@@ -115,22 +100,6 @@ public class MigrasiApplication implements CommandLineRunner {
             }
         }
         System.exit(0); // optional
-    }
-
-    private List<String> addDetailsKnowledge(String jsonString) throws JsonProcessingException {
-
-        ObjectMapper mapper = new ObjectMapper();
-
-        List<Map<String, Object>> list =
-                mapper.readValue(jsonString, new TypeReference<>() {});
-
-        List<String> detailsKnowledge = new ArrayList<>(); // ✅ LOCAL
-
-        for (Map<String, Object> item : list) {
-            detailsKnowledge.add(mapper.writeValueAsString(item));
-        }
-
-        return detailsKnowledge;
     }
 
 

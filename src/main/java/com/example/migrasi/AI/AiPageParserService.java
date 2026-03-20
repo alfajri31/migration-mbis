@@ -10,8 +10,10 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -26,11 +28,12 @@ public class AiPageParserService {
     @Value("${system.feedback.picture}")
     private String systemFeedback;
 
+    @Value("${agent.host.url}")
+    private String url;
+
     private final RestTemplate restTemplate = new RestTemplate();
 
     public List<Map<String, String>> toListMap(String path) {
-
-        String url = "http://localhost:11434/api/chat";
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
@@ -133,5 +136,43 @@ public class AiPageParserService {
         } catch (IOException e) {
             throw new RuntimeException("Gagal encode image: " + path, e);
         }
+    }
+
+    public List<Map<String, String>> toListMapFromDirectory(String directoryPath) {
+
+        List<Map<String, String>> finalResult = Collections.synchronizedList(new ArrayList<>());
+
+        try (Stream<Path> paths = Files.list(Paths.get(directoryPath))) {
+
+            paths
+                    .filter(Files::isRegularFile)
+                    .filter(this::isImageFile)
+                    // .parallel() // <-- aktifkan kalau mau paralel
+                    .forEach(path -> {
+                        try {
+                            log.info("Processing file: {}", path);
+
+                            List<Map<String, String>> result = toListMap(path.toString());
+
+                            finalResult.addAll(result);
+
+                        } catch (Exception e) {
+                            log.error("Error processing file: {}", path, e);
+                        }
+                    });
+
+        } catch (IOException e) {
+            throw new RuntimeException("Gagal baca directory: " + directoryPath, e);
+        }
+
+        return finalResult;
+    }
+
+    private boolean isImageFile(Path path) {
+        String name = path.toString().toLowerCase();
+        return name.endsWith(".jpg")
+                || name.endsWith(".jpeg")
+                || name.endsWith(".png")
+                || name.endsWith(".webp");
     }
 }
