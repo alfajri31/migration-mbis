@@ -30,8 +30,6 @@ public class AiBaseKnowledgeService {
 
     @Value("${ai.model.context.base.knowledge}")
     private int contextWindow;
-    @Value("${ai.context.max.prompt.words}")
-    private int maxWords;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -41,11 +39,19 @@ public class AiBaseKnowledgeService {
 
         int totalChunkCounts = 0;
 
+        int totalLength = 0;
+
         for (List<String> list : data.values()) {
+
+            if(list.toArray().length < safeContextWindow) {
+
+                totalLength+= list.toArray().length;
+
+            }
             totalChunkCounts += list.size();
         }
 
-        int estimationSummaryTokens = totalChunkCounts * (maxWords * 3);
+        int estimationSummaryTokens = totalChunkCounts * (totalLength * 3);
 
         if (estimationSummaryTokens >= safeContextWindow) {
             log.warn("Can't be proceed: tokens will be overflow");
@@ -199,11 +205,6 @@ public class AiBaseKnowledgeService {
         Files.writeString(filePath, content, StandardOpenOption.CREATE);
 
         System.out.println("File saved: " + filePath.toAbsolutePath());
-    }
-
-    private String buildSystemPrompt() {
-        return "Jawaban maksimal "
-                + maxWords + "menggunakan bahasa indonesia.";
     }
 
 }
