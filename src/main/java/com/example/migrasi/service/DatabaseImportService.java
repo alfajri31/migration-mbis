@@ -8,12 +8,12 @@ import java.sql.*;
 import java.util.*;
 
 @Service
-public class DatabaseExportService {
+public class DatabaseImportService {
 
     private final DataSource dataSource;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public DatabaseExportService(DataSource dataSource) {
+    public DatabaseImportService(DataSource dataSource) {
         this.dataSource = dataSource;
     }
 

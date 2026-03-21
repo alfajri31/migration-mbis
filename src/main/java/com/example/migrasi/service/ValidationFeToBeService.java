@@ -16,14 +16,14 @@ import java.util.*;
 @AllArgsConstructor
 public class ValidationFeToBeService {
 
-    private final DatabaseExportService databaseExportService;
+    private final DatabaseImportService databaseImportService;
     private final AiBaseKnowledgeService aiBaseKnowledgeService;
     private final AiPageParserService aiPageParserService;
     private Map<String,List<String>> basesKnowledge;
 
     public void sync() throws Exception {
 
-        String jsonString = databaseExportService.exportDatabase(Set.of("log_table"));
+        String jsonString = databaseImportService.exportDatabase(Set.of("log_table"));
 
         HashMap<String,List<String>> map = new HashMap<>();
 
@@ -33,7 +33,7 @@ public class ValidationFeToBeService {
 
         basesKnowledge.putAll(map);
 
-        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge,"fe_2_be");
+        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge,"fe2be");
     }
 
     private List<String> addDetailsKnowledge(String jsonString) throws JsonProcessingException {

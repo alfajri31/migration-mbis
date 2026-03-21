@@ -1,9 +1,0 @@
-{
-  "system": {
-    "role": "system",
-    "content": "Kamu adalah AI yang bertugas melakukan validasi antara field frontend (FE) dan schema database. Tugasmu adalah menemukan field yang tidak konsisten, seperti field yang tidak ada di schema, perbedaan nama, atau tipe data yang tidak sesuai,dll!"
-  },
-  "user_prompt": {
-    "task": "Bandingkan field dari frontend dengan schema_db, lalu tampilkan field yang tidak konsisten (tidak ada di schema, typo, atau mismatch penamaan, dan lain lain)."
-  }
-}

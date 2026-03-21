@@ -1,9 +1,9 @@
 package com.example.migrasi.service;
 
 import com.example.migrasi.AI.AiBaseKnowledgeService;
-import com.example.migrasi.AI.AiPageParserService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,24 +16,27 @@ import java.util.*;
 @AllArgsConstructor
 public class ValidationExcelToBeService {
 
-    private final DatabaseExportService databaseExportService;
+    private final DatabaseImportService databaseImportService;
     private final AiBaseKnowledgeService aiBaseKnowledgeService;
-    private final AiPageParserService aiPageParserService;
     private Map<String,List<String>> basesKnowledge;
+    private ExcelImportService excelImportService;
 
     public void sync() throws Exception {
 
-        String jsonString = databaseExportService.exportDatabase(Set.of("log_table"));
+
+        String jsonStringDb = databaseImportService.exportDatabase(Set.of("log_table"));
+
+        String jsonStringExcel = excelImportService.scanDirectoryAsJson("C:\\Users\\alfaj\\Projects\\mbis\\migration-mbis\\src\\main\\resources\\excel");
 
         HashMap<String,List<String>> map = new HashMap<>();
 
-        map.put("schema_db", addDetailsKnowledge(jsonString));
+        map.put("schema_db", addDetailsKnowledge(jsonStringDb));
 
-        map.put("frontend",addImagesKnowledges());
+        map.put("client_old_data_version",addDetailsExcelKnowledge(jsonStringExcel));
 
         basesKnowledge.putAll(map);
 
-        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge,"exce_2_be");
+        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge,"client2be");
     }
 
     private List<String> addDetailsKnowledge(String jsonString) throws JsonProcessingException {
@@ -52,28 +55,44 @@ public class ValidationExcelToBeService {
         return detailsKnowledge;
     }
 
-    private List<String> addImagesKnowledges() throws JsonProcessingException {
-
-        List<Map<String,String>> list = aiPageParserService
-                .toListMapFromDirectory("C:\\Users\\alfaj\\Projects\\mbis\\migration-mbis\\src\\main\\resources\\files");
+    private List<String> addDetailsExcelKnowledge(String jsonString) throws JsonProcessingException {
 
         ObjectMapper mapper = new ObjectMapper();
+        List<String> result = new ArrayList<>();
 
-        List<String> detailsKnowledge = new ArrayList<>();
+        JsonNode root = mapper.readTree(jsonString);
 
-        for (Map<String, String> item : list) {
-            detailsKnowledge.add(mapper.writeValueAsString(item));
+        extractNodes(root, mapper, result);
+
+        return result;
+    }
+
+    private void extractNodes(JsonNode node, ObjectMapper mapper, List<String> result) throws JsonProcessingException {
+
+        if (node.isArray()) {
+            for (JsonNode child : node) {
+                extractNodes(child, mapper, result);
+            }
+
+        } else if (node.isObject()) {
+
+            // kalau object berisi value primitive → anggap data
+            boolean isDataNode = true;
+            for (JsonNode child : node) {
+                if (child.isContainerNode()) {
+                    isDataNode = false;
+                    break;
+                }
+            }
+
+            if (isDataNode) {
+                result.add(mapper.writeValueAsString(node));
+            } else {
+                for (JsonNode child : node) {
+                    extractNodes(child, mapper, result);
+                }
+            }
         }
-
-        return detailsKnowledge;
-    }
-
-    private List<String> addCsvKnowledges(List<String> scanCsvFiles) {
-        return null;
-    }
-
-    private List<String> addExcelKnowledges(List<String> scanExcelFiles) {
-        return null;
     }
 
 

@@ -119,8 +119,16 @@ public class AiBaseKnowledgeService {
                 })
                 .toList();
 
+        Map<String, Object> prompt = new HashMap<>();
 
-        Map<String, Object> prompt = promptLoader.loadPrompt("summary-fe-2-be-prompt.json");
+        if(type.equals("fe2be")) {
+           prompt  = promptLoader.loadPrompt("summary-fe2be-prompt.json");
+        }
+
+        if(type.equals("client2be")) {
+            prompt = promptLoader.loadPrompt("summary-client2be-prompt.json");
+        }
+
 
         Map<String, Object> userPrompt = (Map<String, Object>) prompt.get("user_prompt");
 
@@ -167,7 +175,7 @@ public class AiBaseKnowledgeService {
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
-        Map<String, Object> promptMap = promptLoader.loadPrompt("summary-fe-2-be-prompt.json");
+        Map<String, Object> promptMap = promptLoader.loadPrompt("summary-fe2be-prompt.json");
 
         Map<String, Object> systemMap = (Map<String, Object>) promptMap.get("system");
 
