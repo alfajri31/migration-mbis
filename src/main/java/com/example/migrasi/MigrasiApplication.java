@@ -26,7 +26,7 @@ public class MigrasiApplication implements CommandLineRunner {
     private final DivisiMigration divisionMigration;
     private final KanwilMigration kanwilMigration;
     private final PostalCodeMigration postalCodeMigration;
-    private final AiToolsService aiToolsService;
+    private final ValidationFeToBeService validationFeToBeService;
 
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
@@ -90,7 +90,7 @@ public class MigrasiApplication implements CommandLineRunner {
 
                 case "ai" -> {
                     log.info("Running AI Tools...");
-                    aiToolsService.sync();
+                    validationFeToBeService.sync();
                 }
 
                 default -> {

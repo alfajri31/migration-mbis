@@ -14,7 +14,7 @@ import java.util.*;
 @Slf4j
 @Service
 @AllArgsConstructor
-public class AiToolsService {
+public class ValidationExcelToBeService {
 
     private final DatabaseExportService databaseExportService;
     private final AiBaseKnowledgeService aiBaseKnowledgeService;
