@@ -33,7 +33,7 @@ public class ValidationExcelToBeService {
 
         basesKnowledge.putAll(map);
 
-        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge);
+        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge,"exce_2_be");
     }
 
     private List<String> addDetailsKnowledge(String jsonString) throws JsonProcessingException {

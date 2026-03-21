@@ -36,7 +36,7 @@ public class AiBaseKnowledgeService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
+    public void processKnowledgeBase(Map<String, List<String>> data,String type) throws Exception {
 
         int safeContextWindow = contextWindow - 500;
 
@@ -120,7 +120,7 @@ public class AiBaseKnowledgeService {
                 .toList();
 
 
-        Map<String, Object> prompt = promptLoader.loadPrompt("summary-prompt.json");
+        Map<String, Object> prompt = promptLoader.loadPrompt("summary-fe-2-be-prompt.json");
 
         Map<String, Object> userPrompt = (Map<String, Object>) prompt.get("user_prompt");
 
@@ -160,14 +160,14 @@ public class AiBaseKnowledgeService {
 
         log.info("FINAL RESULT:\n{}", finalResult);
 
-        saveToFile(finalResult);
+        saveToFile(finalResult,type);
     }
 
     private String callSummary(String reducePrompt,int chunkIndex,int totalChunkSize) {
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
-        Map<String, Object> promptMap = promptLoader.loadPrompt("summary-prompt.json");
+        Map<String, Object> promptMap = promptLoader.loadPrompt("summary-fe-2-be-prompt.json");
 
         Map<String, Object> systemMap = (Map<String, Object>) promptMap.get("system");
 
@@ -219,7 +219,7 @@ public class AiBaseKnowledgeService {
         return text.length() / 3;
     }
 
-    private void saveToFile(String content) throws Exception {
+    private void saveToFile(String content,String type) throws Exception {
 
         String folderPath = "summary";
 
@@ -227,7 +227,7 @@ public class AiBaseKnowledgeService {
         String timestamp = LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 
-        String fileName = timestamp + ".md";
+        String fileName = type+"_"+timestamp + ".md";
 
         Path directory = Paths.get(folderPath);
         Path filePath = directory.resolve(fileName);

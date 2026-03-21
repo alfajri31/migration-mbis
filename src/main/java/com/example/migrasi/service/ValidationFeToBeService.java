@@ -33,7 +33,7 @@ public class ValidationFeToBeService {
 
         basesKnowledge.putAll(map);
 
-        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge);
+        aiBaseKnowledgeService.processKnowledgeBase(basesKnowledge,"fe_2_be");
     }
 
     private List<String> addDetailsKnowledge(String jsonString) throws JsonProcessingException {
