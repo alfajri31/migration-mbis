@@ -127,11 +127,14 @@ public class AiBaseKnowledgeService {
                 })
                 .toList();
 
-        Map<String, Object> reducePromptMap = promptLoader.loadPrompt("summary-prompt.json");
 
-        reducePromptMap.put("data", parsed);
+        Map<String, Object> prompt = promptLoader.loadPrompt("summary-prompt.json");
 
-        String reducePrompt = mapper.writeValueAsString(reducePromptMap);
+        Map<String, Object> userPrompt = (Map<String, Object>) prompt.get("user_prompt");
+
+        userPrompt.put("data", parsed);
+
+        String reducePrompt = mapper.writeValueAsString(userPrompt);
 
         String finalResult = callSummary(reducePrompt,index, data.size());
 
@@ -144,9 +147,15 @@ public class AiBaseKnowledgeService {
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
+        Map<String, Object> promptMap = promptLoader.loadPrompt("summary-prompt.json");
+
+
+        Map<String, Object> systemMap = (Map<String, Object>) promptMap.get("system");
+        String content = (String) systemMap.get("content");
+
         messages.add(Map.of(
                 "role", "system",
-                "content", "Always present analysis results in table format when identifying problems or ambiguities."
+                "content",content
         ));
         messages.add(Map.of(
                 "role", "user",
