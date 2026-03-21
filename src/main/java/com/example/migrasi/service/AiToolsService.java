@@ -27,8 +27,9 @@ public class AiToolsService {
 
         HashMap<String,List<String>> map = new HashMap<>();
 
-        map.put("BE", addDetailsKnowledge(jsonString));
-        map.put("FE",addImagesKnowledges());
+        map.put("schema_db", addDetailsKnowledge(jsonString));
+
+        map.put("frontend",addImagesKnowledges());
 
         basesKnowledge.putAll(map);
 

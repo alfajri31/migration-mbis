@@ -15,10 +15,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,17 +37,6 @@ public class AiBaseKnowledgeService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     public void processKnowledgeBase(Map<String, List<String>> data) throws Exception {
-
-        data = data.entrySet()
-                .stream()
-                .collect(Collectors.toMap(
-                        entry -> "rel_" + entry.getKey()
-                                .toLowerCase()
-                                .trim()
-                                .replaceAll("\\s+", "_"),
-                        Map.Entry::getValue,
-                        (a, b) -> a // handle duplicate
-                ));
 
         int safeContextWindow = contextWindow - 500;
 
@@ -86,6 +72,7 @@ public class AiBaseKnowledgeService {
         for (Map.Entry<String, List<String>> entry : data.entrySet()) {
 
             String key = entry.getKey();
+
             List<String> chunks = entry.getValue();
 
             log.info("total all size chunks: {} ",chunks.size());
@@ -101,7 +88,9 @@ public class AiBaseKnowledgeService {
                 log.warn("Chunk tokens={}", estimatedTokens);
 
                 if (estimatedTokens > safeContextWindow) {
+
                     log.warn("Chunk over context window, splitting... tokens={} SKIP! I assume this only data insert remnants", estimatedTokens);
+
                     continue;
 
                 } else {
@@ -120,8 +109,11 @@ public class AiBaseKnowledgeService {
         List<Object> parsed = partialSummaries.stream()
                 .map(s -> {
                     try {
+
                         return finalMapper.readValue(s, Object.class);
+
                     } catch (Exception e) {
+
                         throw new RuntimeException(e);
                     }
                 })
@@ -132,7 +124,35 @@ public class AiBaseKnowledgeService {
 
         Map<String, Object> userPrompt = (Map<String, Object>) prompt.get("user_prompt");
 
-        userPrompt.put("data", parsed);
+        //grouped by
+        Map<String, List<Object>> merged = new HashMap<>();
+
+        for (Object obj : parsed) {
+
+            Map<String, Object> map = (Map<String, Object>) obj;
+
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+
+                if (entry.getValue() instanceof List) {
+
+                    merged.computeIfAbsent(entry.getKey(), k -> new ArrayList<>())
+
+                            .addAll((List<Object>) entry.getValue());
+
+                }
+            }
+        }
+
+        // OPTIONAL: jaga urutan penting
+        Map<String, Object> structuredData = new LinkedHashMap<>();
+
+        for(Map.Entry<String, List<String>> entry : data.entrySet()) {
+
+            structuredData.put(entry.getKey(), merged.getOrDefault(entry.getKey(), new ArrayList<>()));
+
+        }
+
+        userPrompt.put("data", structuredData);
 
         String reducePrompt = mapper.writeValueAsString(userPrompt);
 
@@ -149,8 +169,8 @@ public class AiBaseKnowledgeService {
 
         Map<String, Object> promptMap = promptLoader.loadPrompt("summary-prompt.json");
 
-
         Map<String, Object> systemMap = (Map<String, Object>) promptMap.get("system");
+
         String content = (String) systemMap.get("content");
 
         messages.add(Map.of(
@@ -170,8 +190,12 @@ public class AiBaseKnowledgeService {
 
         request.put("stream", false);
 
-        try {
+        request.put("top_p", 1);
 
+        request.put("temperature", 0);
+
+        try {
+            log.info(request.get("messages").toString());
             ResponseEntity<Map> response =
                     restTemplate.postForEntity(url, request, Map.class);
 
@@ -218,5 +242,6 @@ public class AiBaseKnowledgeService {
 
         System.out.println("File saved: " + filePath.toAbsolutePath());
     }
+
 
 }

@@ -1,17 +1,9 @@
 {
-  "user_prompt" : {
-    "task": "FE-to-BE Field Mapping, Missing Data Resolution, and Ambiguity Analysis",
-    "instruction": "Analyze frontend (FE) data against backend (BE) schema and data using the following relation sources: rel_fe (FE-to-BE mapping), rel_be (existing BE schema), and rel_candidate (legacy-to-current schema mapping). Identify missing, null, or empty values, and resolve any mapping ambiguities.",
-    "rules": [
-      "1. ONLY analyze fields with null, empty string, or missing values.",
-      "2. ALWAYS use rel_fe, rel_be, and rel_candidate as the primary reference sources for cross-analysis.",
-      "3. PRIORITIZE actionable solutions to resolve ambiguity or missing mappings.",
-      "4. IF any ambiguity or missing integration is found, present the result in table format (NOT bullet points).",
-      "5. ENSURE mapping consistency between FE and BE fields.",
-      "6. HIGHLIGHT conflicts between rel_fe and rel_candidate mappings if they exist."
-    ]
+  "system": {
+    "role": "system",
+    "content": "Kamu adalah AI yang bertugas melakukan validasi antara field frontend (FE) dan schema database. Tugasmu adalah menemukan field yang tidak konsisten, seperti field yang tidak ada di schema, perbedaan nama, atau tipe data yang tidak sesuai,dll!"
   },
-  "system" : {
-    "content" : "Always present analysis results in table format when identifying problems or ambiguities."
+  "user_prompt": {
+    "task": "Bandingkan field dari frontend dengan schema_db, lalu tampilkan field yang tidak konsisten (tidak ada di schema, typo, atau mismatch penamaan, dan lain lain)."
   }
 }
