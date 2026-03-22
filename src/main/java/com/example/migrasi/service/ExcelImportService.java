@@ -7,7 +7,7 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
@@ -16,10 +16,17 @@ import java.util.*;
 import java.util.stream.Stream;
 
 @Service
-@AllArgsConstructor
 public class ExcelImportService {
 
     private final ObjectMapper objectMapper;
+
+    public ExcelImportService(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+
+    @Value("${ai.data.crawl.limit:5}")
+    private int limit;
 
     // =========================
     // MAIN METHOD (SCAN DIRECTORY)
@@ -27,7 +34,6 @@ public class ExcelImportService {
 
     public String scanDirectoryAsJson(String dirPath) throws Exception {
         Map<String, Object> data = scanDirectory(dirPath);
-
         return objectMapper.writeValueAsString(data);
     }
 
@@ -43,9 +49,9 @@ public class ExcelImportService {
 
                         try {
                             if (fileName.endsWith(".xlsx")) {
-                                result.put(fileName, readExcel(path.toString()));
+                                result.put(fileName, readExcel(path.toString(), limit));
                             } else if (fileName.endsWith(".csv")) {
-                                result.put(fileName, readCsv(path.toFile()));
+                                result.put(fileName, readCsv(path.toFile(), limit));
                             }
                         } catch (Exception e) {
                             result.put(fileName, "ERROR: " + e.getMessage());
@@ -59,7 +65,7 @@ public class ExcelImportService {
     // =========================
     // EXCEL READER (MULTI SHEET)
     // =========================
-    private Map<String, List<Map<String, String>>> readExcel(String filePath) throws Exception {
+    private Map<String, List<Map<String, String>>> readExcel(String filePath, int limit) throws Exception {
 
         Map<String, List<Map<String, String>>> result = new HashMap<>();
 
@@ -71,8 +77,7 @@ public class ExcelImportService {
                 Sheet sheet = workbook.getSheetAt(s);
                 List<Map<String, String>> sheetData = new ArrayList<>();
 
-                int startRow = detectHeaderRow(sheet); // auto detect
-
+                int startRow = detectHeaderRow(sheet);
                 if (startRow == -1) continue;
 
                 Row headerRow = sheet.getRow(startRow);
@@ -82,7 +87,11 @@ public class ExcelImportService {
                     headers.add(cell.toString());
                 }
 
-                for (int i = startRow + 1; i <= sheet.getLastRowNum(); i++) {
+                // 🔥 BATASI SAMPAI LIMIT
+                int endRow = Math.min(startRow + limit, sheet.getLastRowNum());
+
+                for (int i = startRow + 1; i <= endRow; i++) {
+
                     Row row = sheet.getRow(i);
                     if (row == null) continue;
 
@@ -106,14 +115,18 @@ public class ExcelImportService {
     // =========================
     // CSV READER
     // =========================
-    private List<Map<String, String>> readCsv(File file) throws Exception {
+    private List<Map<String, String>> readCsv(File file, int limit) throws Exception {
 
         List<Map<String, String>> result = new ArrayList<>();
 
         try (Reader reader = new FileReader(file);
              CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT.withFirstRecordAsHeader())) {
 
+            int count = 0;
+
             for (CSVRecord record : csvParser) {
+
+                if (count >= limit) break;
 
                 Map<String, String> row = new HashMap<>();
 
@@ -122,6 +135,7 @@ public class ExcelImportService {
                 }
 
                 result.add(row);
+                count++;
             }
         }
 

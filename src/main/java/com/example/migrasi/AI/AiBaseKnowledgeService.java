@@ -164,18 +164,26 @@ public class AiBaseKnowledgeService {
 
         String reducePrompt = mapper.writeValueAsString(userPrompt);
 
-        String finalResult = callSummary(reducePrompt,index, data.size());
+        String finalResult = callSummary(reducePrompt,index, data.size(),type);
 
         log.info("FINAL RESULT:\n{}", finalResult);
 
         saveToFile(finalResult,type);
     }
 
-    private String callSummary(String reducePrompt,int chunkIndex,int totalChunkSize) {
+    private String callSummary(String reducePrompt,int chunkIndex,int totalChunkSize,String type) {
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
-        Map<String, Object> promptMap = promptLoader.loadPrompt("summary-fe2be-prompt.json");
+        Map<String, Object> promptMap = new HashMap<>();
+
+        if(type.equals("fe2be")) {
+            promptMap  = promptLoader.loadPrompt("summary-fe2be-prompt.json");
+        }
+
+        if(type.equals("client2be")) {
+            promptMap = promptLoader.loadPrompt("summary-client2be-prompt.json");
+        }
 
         Map<String, Object> systemMap = (Map<String, Object>) promptMap.get("system");
 
@@ -204,6 +212,7 @@ public class AiBaseKnowledgeService {
 
         try {
             log.info(request.get("messages").toString());
+
             ResponseEntity<Map> response =
                     restTemplate.postForEntity(url, request, Map.class);
 

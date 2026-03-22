@@ -32,7 +32,7 @@ public class ValidationExcelToBeService {
 
         map.put("schema_db", addDetailsKnowledge(jsonStringDb));
 
-        map.put("client_old_data_version",addDetailsExcelKnowledge(jsonStringExcel));
+        map.put("client_data",addDetailsExcelKnowledge(jsonStringExcel));
 
         basesKnowledge.putAll(map);
 
@@ -58,6 +58,7 @@ public class ValidationExcelToBeService {
     private List<String> addDetailsExcelKnowledge(String jsonString) throws JsonProcessingException {
 
         ObjectMapper mapper = new ObjectMapper();
+
         List<String> result = new ArrayList<>();
 
         JsonNode root = mapper.readTree(jsonString);

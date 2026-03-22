@@ -1,6 +1,8 @@
 package com.example.migrasi.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.AllArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -11,10 +13,14 @@ import java.util.*;
 public class DatabaseImportService {
 
     private final DataSource dataSource;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
-    public DatabaseImportService(DataSource dataSource) {
+    @Value("${ai.data.crawl.limit:5}")
+    private int limit;
+
+    public DatabaseImportService(DataSource dataSource, ObjectMapper objectMapper) {
         this.dataSource = dataSource;
+        this.objectMapper = objectMapper;
     }
 
     public String exportDatabase(Set<String> excludedTables) {
@@ -36,7 +42,7 @@ public class DatabaseImportService {
                 Map<String, Object> tableJson = new LinkedHashMap<>();
                 tableJson.put("table", tableName);
                 tableJson.put("ddl", getTableDDL(meta, tableName));
-                tableJson.put("rows", getTableData(conn, tableName));
+                tableJson.put("rows", getTableData(conn, tableName, limit)); // 🔥 pakai limit
 
                 database.add(tableJson);
             }
@@ -92,9 +98,7 @@ public class DatabaseImportService {
             Map<String, Object> fkMap = new LinkedHashMap<>();
 
             fkMap.put("column", fk.getString("FKCOLUMN_NAME"));
-
             fkMap.put("refTable", fk.getString("PKTABLE_NAME"));
-
             fkMap.put("refColumn", fk.getString("PKCOLUMN_NAME"));
 
             fks.add(fkMap);
@@ -105,12 +109,18 @@ public class DatabaseImportService {
         return ddl;
     }
 
-    private List<Map<String, Object>> getTableData(Connection conn, String tableName) throws SQLException {
+    // =========================
+    // 🔥 DATA TABLE (LIMITED)
+    // =========================
+    private List<Map<String, Object>> getTableData(Connection conn, String tableName, int limit) throws SQLException {
 
         List<Map<String, Object>> rows = new ArrayList<>();
 
+        // 🔥 Query pakai LIMIT
+        String query = "SELECT * FROM " + tableName + " LIMIT " + limit;
+
         try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName)) {
+             ResultSet rs = stmt.executeQuery(query)) {
 
             ResultSetMetaData meta = rs.getMetaData();
             int columnCount = meta.getColumnCount();
@@ -128,5 +138,4 @@ public class DatabaseImportService {
 
         return rows;
     }
-
 }
