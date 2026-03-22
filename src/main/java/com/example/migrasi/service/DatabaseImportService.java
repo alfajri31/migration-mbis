@@ -15,7 +15,7 @@ public class DatabaseImportService {
     private final DataSource dataSource;
     private final ObjectMapper objectMapper;
 
-    @Value("${ai.data.crawl.limit:5}")
+    @Value("${ai.model.data.crawl.limit:5}")
     private int limit;
 
     public DatabaseImportService(DataSource dataSource, ObjectMapper objectMapper) {

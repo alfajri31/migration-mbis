@@ -1,7 +1,10 @@
 package com.example.migrasi.AI;
 
 import com.example.migrasi.prompt.PromptLoader;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +34,9 @@ public class AiBaseKnowledgeService {
     @Value("${ai.model.context.base.knowledge}")
     private int contextWindow;
 
+    @Value("${ai.model.data.batch}")
+    private int dataBatch;
+
     @Autowired
     private PromptLoader promptLoader;
 
@@ -57,6 +63,7 @@ public class AiBaseKnowledgeService {
         int estimationSummaryTokens = totalChunkCounts * (totalLength * 3);
 
         if (estimationSummaryTokens >= safeContextWindow) {
+
             log.warn("Can't be proceed: tokens will be overflow");
             return;
         }
@@ -119,19 +126,6 @@ public class AiBaseKnowledgeService {
                 })
                 .toList();
 
-        Map<String, Object> prompt = new HashMap<>();
-
-        if(type.equals("fe2be")) {
-           prompt  = promptLoader.loadPrompt("summary-fe2be-prompt.json");
-        }
-
-        if(type.equals("client2be")) {
-            prompt = promptLoader.loadPrompt("summary-client2be-prompt.json");
-        }
-
-
-        Map<String, Object> userPrompt = (Map<String, Object>) prompt.get("user_prompt");
-
         //grouped by
         Map<String, List<Object>> merged = new HashMap<>();
 
@@ -154,48 +148,194 @@ public class AiBaseKnowledgeService {
         // OPTIONAL: jaga urutan penting
         Map<String, Object> structuredData = new LinkedHashMap<>();
 
-        for(Map.Entry<String, List<String>> entry : data.entrySet()) {
-
-            structuredData.put(entry.getKey(), merged.getOrDefault(entry.getKey(), new ArrayList<>()));
-
+        for (Map.Entry<String, List<String>> entry : data.entrySet()) {
+            structuredData.put(
+                    entry.getKey(),
+                    merged.getOrDefault(entry.getKey(), new ArrayList<>())
+            );
         }
 
-        userPrompt.put("data", structuredData);
+        StringBuilder finalResult = new StringBuilder();
 
-        String reducePrompt = mapper.writeValueAsString(userPrompt);
+        if (dataBatch > 1) {
 
-        String finalResult = callSummary(reducePrompt,index, data.size(),type);
+            // =========================
+            // STEP 1: SPLIT PER KEY
+            // =========================
+            Map<String, List<List<?>>> batchedData = new LinkedHashMap<>();
+
+            int totalSize = ((List<?>) structuredData.values().iterator().next()).size();
+
+            int batchSize = (int) Math.ceil((double) totalSize / dataBatch);
+
+            for (Map.Entry<String, Object> entry : structuredData.entrySet()) {
+
+                List<?> fullList = (List<?>) entry.getValue();
+                List<List<?>> batches = new ArrayList<>();
+
+                for (int i = 0; i < dataBatch; i++) {
+
+                    int start = i * batchSize;
+                    int end = Math.min(start + batchSize, fullList.size());
+
+                    if (start >= fullList.size()) break;
+
+                    batches.add(fullList.subList(start, end));
+                }
+
+                batchedData.put(entry.getKey(), batches);
+            }
+
+            // =========================
+            // STEP 2: CROSS COMBINATION
+            // =========================
+            List<String> keys = new ArrayList<>(batchedData.keySet());
+
+            if (keys.size() < 2) {
+                throw new IllegalStateException("Minimal harus ada 2 key untuk kombinasi");
+            }
+
+            String key1 = keys.get(0);
+            String key2 = keys.get(1);
+
+            List<List<?>> key1Batches = batchedData.get(key1);
+
+            List<List<?>> key2Batches = batchedData.get(key2);
+
+            int totalCombination = key1Batches.size() * key2Batches.size();
+
+            log.info("TOTAL KOMBINASI: {}", totalCombination);
+
+            for (int i = 0; i < key1Batches.size(); i++) {
+
+                for (int j = 0; j < key2Batches.size(); j++) {
+
+                    Map<String, Object> batchData = new LinkedHashMap<>();
+
+                    batchData.put(key1, key1Batches.get(i));
+
+                    batchData.put(key2, key2Batches.get(j));
+
+                    log.info("Combine: {} batch {} WITH {} batch {}", key1, i + 1, key2, j + 1);
+
+                    String result = callSummary(
+                            mapper.writeValueAsString(batchData),
+                            0,
+                            0,
+                            type
+                    );
+
+                    saveToFile(result, type);
+
+                    finalResult.append(result).append("\n");
+                }
+            }
+
+        } else {
+
+            finalResult = new StringBuilder(callSummary(
+                    mapper.writeValueAsString(structuredData),
+                    index,
+                    ((List<?>) structuredData.values().iterator().next()).size(),
+                    type
+            ));
+
+            saveToFile(finalResult.toString(), type);
+        }
 
         log.info("FINAL RESULT:\n{}", finalResult);
-
-        saveToFile(finalResult,type);
     }
 
-    private String callSummary(String reducePrompt,int chunkIndex,int totalChunkSize,String type) {
+    private String callSummary(String dataJson,int chunkIndex,int totalChunkSize,String type) {
+
+        String systemPrompt="";
+
+        String userPrompt="";
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
-        Map<String, Object> promptMap = new HashMap<>();
-
         if(type.equals("fe2be")) {
-            promptMap  = promptLoader.loadPrompt("summary-fe2be-prompt.json");
+
+            systemPrompt ="" +
+                    "Kamu adalah AI yang bertugas melakukan validasi antara key fields frontend (FE) dan key schema_database. " +
+                    "Tugasmu adalah menemukan fields yang tidak konsisten, " +
+                    "seperti fields yang tidak ada di schema_db seperti perbedaan nama, " +
+                    "atau tipe data yang tidak sesuai,dan lain lain!";
+
+
+            userPrompt =
+                    "\"Bandingkan fields dari key 'frontend' dengan key 'schema_db', " +
+                            "lalu tampilkan field yang tidak " +
+                            "konsisten antar " +
+                            "data pada key " +
+                            "(tidak ada di schema_db, typo, atau mismatch penamaan di schema_db, dan lain lain)." +
+                            "\"\n\n"+dataJson;
         }
 
         if(type.equals("client2be")) {
-            promptMap = promptLoader.loadPrompt("summary-client2be-prompt.json");
+
+            systemPrompt =
+                    "You are a strict JSON generator.\n" +
+                            "\n" +
+                            "You must output ONLY valid JSON.\n" +
+                            "No explanation.\n" +
+                            "No text outside JSON.\n" +
+                            "\n" +
+                            "If output is invalid JSON, you have failed.";
+
+            userPrompt =
+                    "ONLY OUTPUT JSON.\n" +
+                            "\n" +
+                            "TASK:\n" +
+                            "Match each schema_column to the most similar client_field.\n" +
+                            "\n" +
+                            "MATCHING RULES:\n" +
+                            "- Use column name similarity (string + semantic allowed)\n" +
+                            "- You MAY normalize text (lowercase, remove underscore, etc.)\n" +
+                            "- You MAY use common synonyms (name=nama, phone=telepon, branch=cabang, etc.)\n" +
+                            "- Do NOT use sample data\n" +
+                            "\n" +
+                            "CONFIDENCE SCORING (IMPORTANT):\n" +
+                            "- 1.0 → exact match or very obvious (same word / minor variation)\n" +
+                            "- 0.8 → very similar meaning (clear synonym or translation)\n" +
+                            "- 0.6 → somewhat similar (related but not exact)\n" +
+                            "- 0.3 → weak similarity\n" +
+                            "- 0.0 → no reasonable similarity\n" +
+                            "\n" +
+                            "OUTPUT RULES:\n" +
+                            "- If best match exists → put in discovery with confidence score\n" +
+                            "- If confidence <= 0.3 → put in not_found instead\n" +
+                            "- NEVER force match if not reasonable\n" +
+                            "\n" +
+                            "OUTPUT FORMAT:\n" +
+                            "{\n" +
+                            "  \"discovery\": [\n" +
+                            "    {\n" +
+                            "      \"schema_column\": \"...\",\n" +
+                            "      \"matched_column\": \"...\",\n" +
+                            "      \"confidence\": 0.0\n" +
+                            "    }\n" +
+                            "  ],\n" +
+                            "  \"not_found\": [\"...\"]\n" +
+                            "}\n" +
+                            "\n" +
+                            "CONSTRAINTS:\n" +
+                            "- Every schema_column MUST appear exactly once\n" +
+                            "- No duplicates\n" +
+                            "- No missing fields\n" +
+                            "\n" +
+                            "DATA:\n" +
+                            dataJson;
         }
 
-        Map<String, Object> systemMap = (Map<String, Object>) promptMap.get("system");
-
-        String content = (String) systemMap.get("content");
 
         messages.add(Map.of(
                 "role", "system",
-                "content",content
+                "content",systemPrompt
         ));
         messages.add(Map.of(
                 "role", "user",
-                "content", reducePrompt
+                "content", userPrompt
         ));
 
         Map<String, Object> request = new HashMap<>();
@@ -206,9 +346,7 @@ public class AiBaseKnowledgeService {
 
         request.put("stream", false);
 
-        request.put("top_p", 1);
-
-        request.put("temperature", 0);
+        request.put("temperature", 0.0);
 
         try {
             log.info(request.get("messages").toString());
@@ -236,28 +374,109 @@ public class AiBaseKnowledgeService {
         return text.length() / 3;
     }
 
-    private void saveToFile(String content,String type) throws Exception {
+    private void saveToFile(String content, String type) throws Exception {
 
         String folderPath = "summary";
-
-        // format tanggal waktu: 2026-03-19_14-30-25
-        String timestamp = LocalDateTime.now()
-                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
-
-        String fileName = type+"_"+timestamp + ".md";
-
         Path directory = Paths.get(folderPath);
-        Path filePath = directory.resolve(fileName);
 
-        // buat folder kalau belum ada
         if (!Files.exists(directory)) {
             Files.createDirectories(directory);
         }
 
-        // simpan file
-        Files.writeString(filePath, content, StandardOpenOption.CREATE);
+        ObjectMapper mapper = new ObjectMapper();
+
+        // 🔥 inject color dulu
+        content = addColorBasedOnConfidence(content);
+
+        Path filePath;
+
+        if ("client2be".equalsIgnoreCase(type)) {
+
+            // ✅ 1 file saja (no timestamp)
+            filePath = directory.resolve("client2be.md");
+
+            JsonNode newData = mapper.readTree(content);
+            ArrayNode finalArray;
+
+            if (Files.exists(filePath)) {
+                String existing = Files.readString(filePath);
+
+                if (existing.isBlank()) {
+                    finalArray = mapper.createArrayNode();
+                } else {
+                    finalArray = (ArrayNode) mapper.readTree(existing);
+                }
+            } else {
+                finalArray = mapper.createArrayNode();
+            }
+
+            // tambah data
+            finalArray.add(newData);
+
+            // overwrite biar tetap valid JSON array
+            Files.writeString(
+                    filePath,
+                    mapper.writerWithDefaultPrettyPrinter().writeValueAsString(finalArray),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING
+            );
+
+        } else {
+
+            // default pakai timestamp
+            String timestamp = LocalDateTime.now()
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+
+            String fileName = type + "_" + timestamp + ".md";
+            filePath = directory.resolve(fileName);
+
+            Files.writeString(filePath, content, StandardOpenOption.CREATE);
+        }
 
         System.out.println("File saved: " + filePath.toAbsolutePath());
+    }
+
+    private String addColorBasedOnConfidence(String json) {
+        try {
+
+            ObjectMapper mapper = new ObjectMapper();
+
+            JsonNode root = mapper.readTree(json);
+
+            // cek apakah ada "discovery"
+            if (root.has("discovery") && root.get("discovery").isArray()) {
+
+                ArrayNode discoveryArray = (ArrayNode) root.get("discovery");
+
+                for (JsonNode item : discoveryArray) {
+
+                    if (item.has("confidence") && item instanceof ObjectNode) {
+
+                        double confidence = item.get("confidence").asDouble();
+
+                        String colored;
+
+                        if (confidence >= 0.7) {
+                            colored = "**🟢 " + confidence + "**";
+                        } else if (confidence >= 0.5) {
+                            colored = "**🟡 " + confidence + "**";
+                        } else {
+                            colored = "**🔴 " + confidence + "**";
+                        }
+
+                        ((ObjectNode) item).put("flag", colored);
+                    }
+                }
+            }
+
+            // return JSON (pretty biar enak dibaca)
+            return mapper.writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(root);
+
+        } catch (Exception e) {
+            e.printStackTrace(); // penting buat debug
+            return json; // fallback kalau error
+        }
     }
 
 

@@ -23,7 +23,6 @@ public class ValidationExcelToBeService {
 
     public void sync() throws Exception {
 
-
         String jsonStringDb = databaseImportService.exportDatabase(Set.of("log_table"));
 
         String jsonStringExcel = excelImportService.scanDirectoryAsJson("C:\\Users\\alfaj\\Projects\\mbis\\migration-mbis\\src\\main\\resources\\excel");
@@ -59,16 +58,46 @@ public class ValidationExcelToBeService {
 
         ObjectMapper mapper = new ObjectMapper();
 
-        List<String> result = new ArrayList<>();
-
         JsonNode root = mapper.readTree(jsonString);
 
-        extractNodes(root, mapper, result);
+        // ambil semua data row dulu
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        extractNodes(root, mapper, rows);
+
+        // GROUP BY STRUKTUR KOLOM
+        Map<Set<String>, List<Map<String, Object>>> grouped = new HashMap<>();
+
+        for (Map<String, Object> row : rows) {
+
+            Set<String> keys = row.keySet();
+
+            grouped.computeIfAbsent(keys, k -> new ArrayList<>()).add(row);
+        }
+
+        // CONVERT KE FORMAT AI
+        List<String> result = new ArrayList<>();
+
+        for (Map.Entry<Set<String>, List<Map<String, Object>>> entry : grouped.entrySet()) {
+
+            Map<String, Object> tableCandidate = new LinkedHashMap<>();
+
+            tableCandidate.put("client_fields", entry.getKey());
+
+            List<Map<String, Object>> sampleRows = entry.getValue()
+                    .stream()
+                    .limit(5)
+                    .toList();
+
+            tableCandidate.put("sample_data", sampleRows);
+
+            result.add(mapper.writeValueAsString(tableCandidate));
+        }
 
         return result;
     }
 
-    private void extractNodes(JsonNode node, ObjectMapper mapper, List<String> result) throws JsonProcessingException {
+    private void extractNodes(JsonNode node, ObjectMapper mapper, List<Map<String, Object>> result) {
 
         if (node.isArray()) {
             for (JsonNode child : node) {
@@ -77,7 +106,6 @@ public class ValidationExcelToBeService {
 
         } else if (node.isObject()) {
 
-            // kalau object berisi value primitive → anggap data
             boolean isDataNode = true;
             for (JsonNode child : node) {
                 if (child.isContainerNode()) {
@@ -87,7 +115,8 @@ public class ValidationExcelToBeService {
             }
 
             if (isDataNode) {
-                result.add(mapper.writeValueAsString(node));
+                Map<String, Object> map = mapper.convertValue(node, new TypeReference<>() {});
+                result.add(map);
             } else {
                 for (JsonNode child : node) {
                     extractNodes(child, mapper, result);
