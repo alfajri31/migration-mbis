@@ -247,6 +247,7 @@ public class AiBaseKnowledgeService {
         }
 
         String key1 = keys.get(0);
+
         String key2 = keys.get(1);
 
         List<List<?>> key1Batches = batchedData.get(key1);
@@ -256,8 +257,6 @@ public class AiBaseKnowledgeService {
         int totalCombination = key1Batches.size() * key2Batches.size();
 
         log.info("TOTAL KOMBINASI: {}", totalCombination);
-
-        StringBuilder finalResult = new StringBuilder();
 
         for (int i = 0; i < key1Batches.size(); i++) {
 
@@ -325,130 +324,62 @@ public class AiBaseKnowledgeService {
 
     }
 
-    private void callSummary(String dataJson, String type) throws Exception {
+    private void callSummary(String dataJson, String type) {
 
         ObjectMapper mapper  = new ObjectMapper();
 
         String systemPrompt="";
 
-        String userPrompt="";
-
         if(type.equals("fe2be")) {
 
-            Map<String, Object> request = new HashMap<>();
+            systemPrompt = """
+                        OUTPUT HARUS JSON SAJA TANPA PENJELASAN.
+                        
+                        PERAN:
+                        AI untuk mapping field kosong dari frontend ke schema database.
+                        
+                        TUJUAN:
+                        - Cari field schema_db yang paling cocok untuk mengisi field frontend yang kosong
+                        
+                        KRITERIA:
+                        - Nama field 
+                        - Value field
+                        
+                        FORMAT OUTPUT:
+                        {
+                          "fe_field": "...",
+                          "fe_value": "...",
+                          "existing_table_name": "...",
+                          "existing_table_field_name": "...",
+                          "confidence": "high | medium | low",
+                          "reason": "..."
+                        }
+                        
+                        RULE:
+                        - Jika tidak relevan → skip (jangan dipaksa)
+                        - Hanya JSON
+                        """;
 
-            List<Map<String, Object>> messages = new ArrayList<>();
 
-            systemPrompt = """                    
-                    Kamu adalah AI yang bertugas melakukan validasi
-                    antara items key frontend (FE) dan items key schema_database (DB).
-                    Tugasmu adalah menemukan item yang empty string atau null dari items key FE
-                    dan itu kamu harus tau mapping ke field mana yang cocok di item key schema_db.
-                    
-                    Output WAJIB dalam format JSON TANPA penjelasan tambahan:
-                    {
-                       item_fe_empty: "",
-                       field_schema_db_must_be_filled: "
-                    }                                                 
-                   """;
+            List<String> userPrompts = buildPromptFe2Be(dataJson);
 
-
-            userPrompt = """
-                            Bandingkan fields dari items key frontend 'fe' dengan items key db 'schema_db'
-                            lalu tampilkan item yang empty string atau null dari items key fe,
-                            dan itu mestinya di mapping ke field mana di schema_db nya?,
-                            berikut ini adalah datanya.
-                            %s
-                         """.formatted(dataJson);
-
-            messages.add(Map.of(
-                    "role", "system",
-                    "content",systemPrompt
-            ));
-            messages.add(Map.of(
-                    "role", "user",
-                    "content", userPrompt
-            ));
-
-            request.put("model", aiModel);
-
-            request.put("messages", messages);
-
-            request.put("stream", false);
-
-            ResponseEntity<Map> response =
-                    restTemplate.postForEntity(url, request, Map.class);
-
-            Map body = response.getBody();
-
-            Map message = (Map) body.get("message");
-
-            String content = message.get("content").toString();
-
-//            saveToFile(content, type);
-
-            log.info("response complete");
-
-        }
-
-        if(type.equals("client2be")) {
-
-            List<String> prompts = buildPromptList(dataJson);
-
-            systemPrompt =
-                    """                            
-                            RESPONSE HARUS JSON SAJA NO ADDITIONAL EXPLANATION!
-                            
-                            Kamu adalah AI yang bertugas melakukan cek kemiripan nama field antara field A -> field key client_data dengan field B ->  field key dari schema_db
-
-                            Tugas kamu:
-                            - Menilai tingkat kemiripan (confidence) antara dua field: field A key client_data dan field B key schema_db.
-                            - Berikan nilai confidence dari zero sampai high:
-                              - high = yakin (makna sama persis)
-                              - medium = cukup relevan
-                              - low = sedikit relevan
-                              - zero = tidak relevan
-
-                            Aturan penting:
-                            - Pertimbangkan konteks umum database (contoh: Email → email, Username → user_name, Password → password_hash).
-                            - Abaikan perbedaan huruf besar/kecil dan simbol.
-                            - Jika field client jelas tidak berhubungan dengan schema, beri nilai rendah zero.
-
-                            Output WAJIB dalam format JSON TANPA penjelasan tambahan:
-                            {
-                              "client_field": "<nama field client>",
-                              "schema_field": "<nama field schema>",
-                              "confidence": <zero - high>,
-                              "reason": <alasan confidence atau alasan fuzzy>
-                            }""";
-
-            for (int i = 0; i < prompts.size(); i++) {
+            for (String prompt : userPrompts) {
 
                 Map<String, Object> request = new HashMap<>();
 
                 List<Map<String, Object>> messages = new ArrayList<>();
 
-                messages.add(Map.of(
-                        "role", "system",
-                        "content", systemPrompt
-                ));
+                messages.add(Map.of("role", "system", "content", systemPrompt));
 
-                messages.add(Map.of(
-                        "role", "user",
-                        "content", prompts.get(i)
-                ));
+                messages.add(Map.of("role", "user", "content", prompt));
 
                 request.put("model", aiModel);
-
                 request.put("messages", messages);
-
-                request.put("temperature",0);
-
+                request.put("temperature", 0);
                 request.put("stream", false);
 
-                log.info("Request prompt: {}", prompts.get(i));
-
-                ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
+                ResponseEntity<Map> response =
+                        restTemplate.postForEntity(url, request, Map.class);
 
                 Map body = response.getBody();
 
@@ -459,13 +390,174 @@ public class AiBaseKnowledgeService {
                 try {
                     JsonNode node = mapper.readTree(content);
                     saveToFile(node, type);
-                }catch (Exception e) {
+                } catch (Exception e) {
                     log.info("error json node {}", e.getMessage());
                 }
+            }
 
-                log.info("response complete index {} of {}", i + 1, prompts.size());
+        }
+
+        if(type.equals("client2be")) {
+
+            List<String> userPrompts = buildPromptClient2Be(dataJson);
+
+            systemPrompt = """
+                            OUTPUT HARUS BERUPA JSON SAJA. TANPA PENJELASAN ATAU TEKS TAMBAHAN.
+                            
+                            PERAN:
+                            AI untuk mencocokkan field antara:
+                            1. client_data
+                            2. schema_db
+                            
+                            TUJUAN:
+                            - Cari pasangan field paling relevan
+                            - Jika tidak ada yang cocok, skip!!
+                            
+                            KRITERIA:
+                            - Nama kolom
+                            - Value kolom
+                            
+                            FORMAT OUTPUT:
+                            {
+                              "client_column_name": "...",
+                              "client_sample_data": "...",
+                              "existing_table_name": "...",
+                              "existing_table_field_value": "...",
+                              "summary_confidence": "high | medium | low",
+                              "reason": "..."
+                            }
+                            
+                            CATATAN:
+                            - Hanya JSON
+                            - Hanya mapping yang valid
+                            """;
+
+            for (String prompt : userPrompts) {
+
+                Map<String, Object> request = new HashMap<>();
+
+                List<Map<String, Object>> messages = new ArrayList<>();
+
+                messages.add(Map.of("role", "system", "content", systemPrompt));
+
+                messages.add(Map.of("role", "user", "content", prompt));
+
+                request.put("model", aiModel);
+                request.put("messages", messages);
+                request.put("temperature", 0);
+                request.put("stream", false);
+
+                ResponseEntity<Map> response =
+                        restTemplate.postForEntity(url, request, Map.class);
+
+                Map body = response.getBody();
+
+                Map message = (Map) body.get("message");
+
+                String content = message.get("content").toString();
+
+                try {
+                    JsonNode node = mapper.readTree(content);
+                    saveToFile(node, type);
+                } catch (Exception e) {
+                    log.info("error json node {}", e.getMessage());
+                }
             }
         }
+    }
+
+    public List<String> buildPromptClient2Be(String jsonData) {
+
+        List<String> prompts = new ArrayList<>();
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(jsonData);
+
+            JsonNode clientData = root.path("client_data");
+            JsonNode schemaDb = root.path("schema_db");
+
+            // Loop semua client_data
+            for (JsonNode client : clientData) {
+                JsonNode clientColumns = client.path("client_columns");
+
+                // Loop semua schema_db
+                for (JsonNode schema : schemaDb) {
+                    JsonNode schemaColumns = schema.path("schema_columns");
+
+                    // Loop schema columns
+                    for (JsonNode schemaCol : schemaColumns) {
+                        String schemaColumn = schemaCol.asText();
+
+                        // Loop client columns
+                        for (JsonNode clientCol : clientColumns) {
+                            String clientColumn = clientCol.asText();
+
+                            // Build prompt per item
+                            String prompt = "Apakah item field ini '" + clientColumn +"' di client_data ini sudah terisi di key schema_db existing?";
+
+                            prompts.add(prompt);
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error parsing JSON", e);
+        }
+
+        return prompts;
+    }
+
+    public List<String> buildPromptFe2Be(String jsonData) {
+
+        List<String> prompts = new ArrayList<>();
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(jsonData);
+
+            JsonNode frontend = root.path("frontend");
+            JsonNode schemaDb = root.path("schema_db");
+
+            for (JsonNode fe : frontend) {
+                String field = fe.path("field").asText();
+                String value = fe.path("value").asText();
+
+                // hanya ambil yang kosong
+                if (value == null || value.isEmpty()) {
+
+                    for (JsonNode schema : schemaDb) {
+                        String tableName = schema.path("table").asText();
+
+                        JsonNode columns = schema.path("schema_columns");
+
+                        for (JsonNode col : columns) {
+
+                            String schemaColumn = col.asText();
+
+                            String prompt = String.format("""
+                            Field frontend berikut kosong:
+                            field: %s
+                            value: %s
+                            
+                            Apakah field ini sudah terisi di:
+                            column: %s
+                            table: %s ?
+                            
+                            """, field, value, schemaColumn, tableName);
+
+                            prompts.add(prompt);
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        return prompts;
     }
 
     public int estimateTokens(String text) {
@@ -576,52 +668,8 @@ function filterTable(input, colIndex) {
         System.out.println("HTML updated: " + filePath.toAbsolutePath());
     }
 
-    public List<String> buildPromptList(String jsonData) {
 
-        List<String> prompts = new ArrayList<>();
 
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(jsonData);
-
-            JsonNode clientData = root.path("client_data");
-            JsonNode schemaDb = root.path("schema_db");
-
-            // Loop semua client_data
-            for (JsonNode client : clientData) {
-                JsonNode clientColumns = client.path("client_columns");
-
-                // Loop semua schema_db
-                for (JsonNode schema : schemaDb) {
-                    JsonNode schemaColumns = schema.path("schema_columns");
-
-                    // Loop schema columns
-                    for (JsonNode schemaCol : schemaColumns) {
-                        String schemaColumn = schemaCol.asText();
-
-                        // Loop client columns
-                        for (JsonNode clientCol : clientColumns) {
-                            String clientColumn = clientCol.asText();
-
-                            // Build prompt per item
-                            String prompt = "berapa tingkat konfident dari field "
-                                    + clientColumn
-                                    + " dengan field "
-                                    + schemaColumn
-                                    + " dari zero - high?";
-
-                            prompts.add(prompt);
-                        }
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            throw new RuntimeException("Error parsing JSON", e);
-        }
-
-        return prompts;
-    }
 
 
 }
