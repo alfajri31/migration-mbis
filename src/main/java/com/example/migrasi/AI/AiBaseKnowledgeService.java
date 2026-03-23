@@ -421,6 +421,7 @@ public class AiBaseKnowledgeService {
                         TUJUAN:
                         - Cari field di client_data yang paling mirip dengan field di schema_db
                         - HANYA berdasarkan kemiripan nama field (string similarity)
+                        - setelah mendapatkan kemiripan maka ambil nama table isikan ke schema_db_table_name 
                         
                         ATURAN:
                         - Abaikan value (TIDAK PERLU DIPERTIMBANGKAN)
