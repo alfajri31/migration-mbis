@@ -419,7 +419,7 @@ public class AiBaseKnowledgeService {
                         2. schema_db
                         
                         TUJUAN:
-                        - Cari field di schema_db yang paling mirip dengan field di client_data
+                        - Cari field di client_data yang paling mirip dengan field di schema_db
                         - HANYA berdasarkan kemiripan nama field (string similarity)
                         
                         ATURAN:
