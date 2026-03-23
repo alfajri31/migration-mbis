@@ -392,36 +392,18 @@ public class AiBaseKnowledgeService {
                     "ONLY OUTPUT JSON.\n" +
                             "\n" +
                             "TASK:\n" +
-                            "Match `client_columns` to column in `schema_db` using STRICT name similarity,\n" +
-                            "AND validate using `sample_data` values.\n" +
+                            "Match client_columns to schema_db columns using name and sample_data.\n" +
                             "\n" +
-                            "NORMALIZATION:\n" +
-                            "- lowercase\n" +
-                            "- remove spaces and underscores\n" +
-                            "- remove suffix: id, _id\n" +
-                            "\n" +
-                            "ALLOWED MATCH:\n" +
-                            "1. Exact normalized match → base 1.0\n" +
-                            "2. Minor format variation → base 0.8\n" +
-                            "3. schema_value is row value from the table in schema_db\n" +
-                            "\n" +
-                            "VALUE VALIDATION:\n" +
-                            "- Compare sample_data between client and schema\n" +
-                            "- Use BOTH values:\n" +
-                            "  - client_value\n" +
-                            "  - schema_value\n" +
-                            "\n" +
-                            "EVALUATION:\n" +
-                            "- If values clearly match → keep or +0.1\n" +
-                            "- If format slightly different → -0.2\n" +
-                            "- If conflicting → -0.4\n" +
-                            "- If type mismatch → REJECT\n" +
-                            "- If both values empty → no adjustment\n" +
+                            "RULES:\n" +
+                            "- normalize: lowercase, remove spaces, underscores, 'id'\n" +
+                            "- schema_value must be real row value (not column name)\n" +
+                            "- if no value → skip\n" +
+                            "- different meaning → reject\n" +
                             "\n" +
                             "CONFIDENCE:\n" +
-                            "- Start from name similarity\n" +
-                            "- Adjust with value validation\n" +
-                            "- Final ≤0.6 → DO NOT INCLUDE in output\n" +
+                            "- exact name + value match → high\n" +
+                            "- partial name + similar value → medium\n" +
+                            "- otherwise → skip\n" +
                             "\n" +
                             "OUTPUT:\n" +
                             "{\n" +
@@ -429,21 +411,19 @@ public class AiBaseKnowledgeService {
                             "    {\n" +
                             "      \"client_column\": \"...\",\n" +
                             "      \"schema_column\": \"...\",\n" +
-                            "      \"confidence\": 0.0,\n" +
+                            "      \"confidence\": \"high | medium\",\n" +
                             "      \"client_value\": \"...\",\n" +
                             "      \"schema_value\": \"...\",\n" +
-                            "      \"value_match\": \"match | weak | conflict\",\n" +
-                            "      \"reasoning\": \"short explanation\"\n" +
+                            "      \"value_match\": \"match | weak\",\n" +
+                            "      \"reasoning\": \"exact/partial + value reason\"\n" +
                             "    }\n" +
                             "  ]\n" +
                             "}\n" +
                             "\n" +
-                            "RULE:\n" +
-                            "- Only include VALID matches (confidence > 0.6)\n" +
-                            "- reasoning MUST include:\n" +
-                            "  - name similarity type\n" +
-                            "  - value comparison result\n" +
-                            "- If unsure → SKIP (do not output)\n" +
+                            "REASONING:\n" +
+                            "- mention name match (exact/partial)\n" +
+                            "- mention value comparison\n" +
+                            "- no generic text\n" +
                             "\n" +
                             "DATA:\n" +
                             dataJson;
@@ -550,13 +530,13 @@ public class AiBaseKnowledgeService {
 
                     if (item.has("confidence") && item instanceof ObjectNode) {
 
-                        double confidence = item.get("confidence").asDouble();
+                        String confidence = item.get("confidence").asText();
 
                         String colored;
 
-                        if (confidence >= 0.7) {
+                        if (confidence.equals("high")) {
                             colored = "**🟢 " + confidence + "**";
-                        } else if (confidence >= 0.5) {
+                        } else if (confidence.equals("medium")) {
                             colored = "**🟡 " + confidence + "**";
                         } else {
                             colored = "**🔴 " + confidence + "**";
