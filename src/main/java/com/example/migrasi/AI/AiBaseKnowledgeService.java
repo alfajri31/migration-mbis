@@ -394,36 +394,50 @@ public class AiBaseKnowledgeService {
                             "TASK:\n" +
                             "Match client_columns to schema_db columns using name and sample_data.\n" +
                             "\n" +
+                            "CONTEXT:\n" +
+                            "- This is partial (batched) data\n" +
+                            "- Use best guess if needed\n" +
+                            "\n" +
+                            "IMPORTANT:\n" +
+                            "- schema_value MUST be actual row data\n" +
+                            "- DO NOT use column name or data type (e.g. 'uuid', 'string', 'int') as value\n" +
+                            "- If only type is available → treat as no value\n" +
+                            "\n" +
                             "RULES:\n" +
                             "- normalize: lowercase, remove spaces, underscores, 'id'\n" +
-                            "- schema_value must be real row value (not column name)\n" +
-                            "- if no value → skip\n" +
-                            "- different meaning → reject\n" +
+                            "- if no value, rely on name similarity only\n" +
                             "\n" +
                             "CONFIDENCE:\n" +
-                            "- exact name + value match → high\n" +
-                            "- partial name + similar value → medium\n" +
-                            "- otherwise → skip\n" +
+                            "- exact name + valid value match → high\n" +
+                            "- partial name or no value → medium\n" +
+                            "- unclear → low\n" +
                             "\n" +
                             "OUTPUT:\n" +
                             "{\n" +
-                            "  \"discovery\": [\n" +
+                            "  \"found\": [\n" +
                             "    {\n" +
                             "      \"client_column\": \"...\",\n" +
                             "      \"schema_column\": \"...\",\n" +
-                            "      \"confidence\": \"high | medium\",\n" +
+                            "      \"confidence\": \"high\",\n" +
                             "      \"client_value\": \"...\",\n" +
                             "      \"schema_value\": \"...\",\n" +
-                            "      \"value_match\": \"match | weak\",\n" +
-                            "      \"reasoning\": \"exact/partial + value reason\"\n" +
+                            "      \"reasoning\": \"...\"\n" +
+                            "    }\n" +
+                            "  ],\n" +
+                            "  \"not_found\": [\n" +
+                            "    {\n" +
+                            "      \"client_column\": \"...\",\n" +
+                            "      \"reason\": \"low confidence or no valid value\"\n" +
                             "    }\n" +
                             "  ]\n" +
                             "}\n" +
                             "\n" +
+                            "RULE:\n" +
+                            "- ONLY high goes to found\n" +
+                            "\n" +
                             "REASONING:\n" +
-                            "- mention name match (exact/partial)\n" +
-                            "- mention value comparison\n" +
-                            "- no generic text\n" +
+                            "- mention name match\n" +
+                            "- mention if value is valid or missing\n" +
                             "\n" +
                             "DATA:\n" +
                             dataJson;
@@ -446,8 +460,6 @@ public class AiBaseKnowledgeService {
         request.put("messages", messages);
 
         request.put("stream", false);
-
-        request.put("temperature", 0.0);
 
         try {
             log.info(request.get("messages").toString());
@@ -485,8 +497,13 @@ public class AiBaseKnowledgeService {
         }
 
         // inject color dulu
-        content = addColorBasedOnConfidence(content);
+        try {
+            content = addColorBasedOnConfidence(content);
 
+        }catch (Exception e) {
+            e.printStackTrace();
+
+        }
         // 🔥 1 file per type (tanpa timestamp)
         String fileName = type.toLowerCase() + ".md";
         Path filePath = directory.resolve(fileName);
@@ -516,44 +533,42 @@ public class AiBaseKnowledgeService {
 
     private String addColorBasedOnConfidence(String json) {
         try {
-
             ObjectMapper mapper = new ObjectMapper();
 
             JsonNode root = mapper.readTree(json);
 
-            // cek apakah ada "discovery"
-            if (root.has("discovery") && root.get("discovery").isArray()) {
+            // ===== HANDLE FOUND =====
+            if (root.has("found") && root.get("found").isArray()) {
+                ArrayNode foundArray = (ArrayNode) root.get("found");
 
-                ArrayNode discoveryArray = (ArrayNode) root.get("discovery");
+                for (JsonNode item : foundArray) {
+                    if (item instanceof ObjectNode) {
+                        String confidence = item.has("confidence")
+                                ? item.get("confidence").asText()
+                                : "high";
 
-                for (JsonNode item : discoveryArray) {
-
-                    if (item.has("confidence") && item instanceof ObjectNode) {
-
-                        String confidence = item.get("confidence").asText();
-
-                        String colored;
-
-                        if (confidence.equals("high")) {
-                            colored = "**🟢 " + confidence + "**";
-                        } else if (confidence.equals("medium")) {
-                            colored = "**🟡 " + confidence + "**";
-                        } else {
-                            colored = "**🔴 " + confidence + "**";
-                        }
-
+                        String colored = "**🟢 " + confidence + "**";
                         ((ObjectNode) item).put("flag", colored);
                     }
                 }
             }
 
-            // return JSON (pretty biar enak dibaca)
-            return mapper.writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(root);
+            // ===== HANDLE NOT_FOUND =====
+            if (root.has("not_found") && root.get("not_found").isArray()) {
+                ArrayNode notFoundArray = (ArrayNode) root.get("not_found");
+
+                for (JsonNode item : notFoundArray) {
+                    if (item instanceof ObjectNode) {
+                        ((ObjectNode) item).put("flag", "**🔴 not_found**");
+                    }
+                }
+            }
+
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
 
         } catch (Exception e) {
-            e.printStackTrace(); // penting buat debug
-            return json; // fallback kalau error
+            e.printStackTrace();
+            return json;
         }
     }
 
