@@ -34,12 +34,10 @@ public class AiBaseKnowledgeService {
     @Value("${ai.model.context.base.knowledge}")
     private int contextWindow;
 
-    @Value("${ai.model.data.batch}")
-    private int dataBatch;
-
     @Autowired
     private PromptLoader promptLoader;
 
+    private final static int reservedTokens= 5000;
     private final RestTemplate restTemplate = new RestTemplate();
 
     // =========================
@@ -47,7 +45,7 @@ public class AiBaseKnowledgeService {
     // =========================
     public void processKnowledgeBase(Map<String, List<String>> data, String type) throws Exception {
 
-        int safeContextWindow = contextWindow - 500;
+        int safeContextWindow = contextWindow - reservedTokens;
 
         if (isTokenOverflow(data, safeContextWindow)) {
             log.warn("Can't be proceed: tokens will be overflow");
@@ -64,8 +62,10 @@ public class AiBaseKnowledgeService {
 
         String finalResult;
 
-        if (dataBatch > 1) {
-            finalResult = processBatch(structuredData, mapper, type);
+        int autoBatch = calculateBatchCountSmart(structuredData);
+
+        if (autoBatch > 1) {
+            finalResult = processBatch(structuredData, mapper, type,autoBatch);
         } else {
             finalResult = processSingle(structuredData, mapper, type);
         }
@@ -73,6 +73,37 @@ public class AiBaseKnowledgeService {
         log.info("FINAL RESULT:\n{}", finalResult);
     }
 
+    private int calculateBatchCountSmart(Map<String, Object> structuredData) {
+
+        int totalChars = 0;
+        int totalItems = 0;
+
+        for (Map.Entry<String, Object> entry : structuredData.entrySet()) {
+            List<?> list = (List<?>) entry.getValue();
+
+            for (Object o : list) {
+                int len = o.toString().length();
+                totalChars += len;
+                totalItems++;
+            }
+        }
+
+        if (totalItems == 0) return 1;
+
+        // rata-rata panjang item
+        double avgSize = (double) totalChars / totalItems;
+
+        // estimasi ideal items per batch (dinamis)
+        int itemsPerBatch = (int) Math.sqrt(totalItems);
+
+        // estimasi char per batch
+        double estimatedBatchSize = itemsPerBatch * avgSize;
+
+        // jumlah batch
+        int batchCount = (int) Math.ceil((double) totalChars / estimatedBatchSize);
+
+        return Math.max(batchCount, 1);
+    }
     // =========================
     // TOKEN VALIDATION
     // =========================
@@ -168,11 +199,12 @@ public class AiBaseKnowledgeService {
             List<Object> data = merged.getOrDefault(key, new ArrayList<>());
 
             // 🔥 SPECIAL HANDLING schema_db
-            if ("schema_db".equals(key)) {
-                structuredData.put(key, transformSchemaDb(data));
-            } else {
-                structuredData.put(key, data);
-            }
+//            if ("schema_db".equals(key)) {
+//                structuredData.put(key, transformSchemaDb(data));
+//            } else {
+//                structuredData.put(key, data);
+//            }
+            structuredData.put(key, data);
         }
 
         return structuredData;
@@ -215,9 +247,10 @@ public class AiBaseKnowledgeService {
     // =========================
     private String processBatch(Map<String, Object> structuredData,
                                 ObjectMapper mapper,
-                                String type) throws Exception {
+                                String type,
+                                int dataBatch) throws Exception {
 
-        Map<String, List<List<?>>> batchedData = splitBatches(structuredData);
+        Map<String, List<List<?>>> batchedData = splitBatches(structuredData,dataBatch);
 
         List<String> keys = new ArrayList<>(batchedData.keySet());
 
@@ -229,14 +262,17 @@ public class AiBaseKnowledgeService {
         String key2 = keys.get(1);
 
         List<List<?>> key1Batches = batchedData.get(key1);
+
         List<List<?>> key2Batches = batchedData.get(key2);
 
         int totalCombination = key1Batches.size() * key2Batches.size();
+
         log.info("TOTAL KOMBINASI: {}", totalCombination);
 
         StringBuilder finalResult = new StringBuilder();
 
         for (int i = 0; i < key1Batches.size(); i++) {
+
             for (int j = 0; j < key2Batches.size(); j++) {
 
                 Map<String, Object> batchData = Map.of(
@@ -254,6 +290,7 @@ public class AiBaseKnowledgeService {
                 );
 
                 saveToFile(result, type);
+
                 finalResult.append(result).append("\n");
             }
         }
@@ -264,11 +301,12 @@ public class AiBaseKnowledgeService {
     // =========================
     // SPLIT BATCH
     // =========================
-    private Map<String, List<List<?>>> splitBatches(Map<String, Object> structuredData) {
+    private Map<String, List<List<?>>> splitBatches(Map<String, Object> structuredData,int dataBatch) {
 
         Map<String, List<List<?>>> batchedData = new LinkedHashMap<>();
 
         int totalSize = ((List<?>) structuredData.values().iterator().next()).size();
+
         int batchSize = (int) Math.ceil((double) totalSize / dataBatch);
 
         for (Map.Entry<String, Object> entry : structuredData.entrySet()) {
@@ -354,7 +392,8 @@ public class AiBaseKnowledgeService {
                     "ONLY OUTPUT JSON.\n" +
                             "\n" +
                             "TASK:\n" +
-                            "Match `client_columns` to `schema_columns` using STRICT name similarity.\n" +
+                            "Match `client_columns` to column in `schema_db` using STRICT name similarity,\n" +
+                            "AND validate using `sample_data` values.\n" +
                             "\n" +
                             "NORMALIZATION:\n" +
                             "- lowercase\n" +
@@ -362,36 +401,49 @@ public class AiBaseKnowledgeService {
                             "- remove suffix: id, _id\n" +
                             "\n" +
                             "ALLOWED MATCH:\n" +
-                            "1. Exact normalized match → 1.0\n" +
-                            "2. Minor format variation (username = user_name) → 0.8\n" +
-                            "3. Strict synonyms ONLY:\n" +
-                            "   name = nama\n" +
-                            "   description = keterangan\n" +
-                            "   email = email\n" +
-                            "   phone = telepon\n" +
-                            "   branch = cabang / kanwil\n" +
+                            "1. Exact normalized match → base 1.0\n" +
+                            "2. Minor format variation → base 0.8\n" +
+                            "3. schema_value is row value from the table in schema_db\n" +
                             "\n" +
-                            "REJECT IF:\n" +
-                            "- not clearly similar by name\n" +
-                            "- semantic/context guess\n" +
-                            "- partial match\n" +
-                            "- generic fields (id, name) unless exact\n" +
+                            "VALUE VALIDATION:\n" +
+                            "- Compare sample_data between client and schema\n" +
+                            "- Use BOTH values:\n" +
+                            "  - client_value\n" +
+                            "  - schema_value\n" +
+                            "\n" +
+                            "EVALUATION:\n" +
+                            "- If values clearly match → keep or +0.1\n" +
+                            "- If format slightly different → -0.2\n" +
+                            "- If conflicting → -0.4\n" +
+                            "- If type mismatch → REJECT\n" +
+                            "- If both values empty → no adjustment\n" +
                             "\n" +
                             "CONFIDENCE:\n" +
-                            "- 1.0 = exact\n" +
-                            "- 0.8 = variation/synonym\n" +
-                            "- ≤0.6 = NO MATCH\n" +
+                            "- Start from name similarity\n" +
+                            "- Adjust with value validation\n" +
+                            "- Final ≤0.6 → DO NOT INCLUDE in output\n" +
                             "\n" +
                             "OUTPUT:\n" +
                             "{\n" +
                             "  \"discovery\": [\n" +
-                            "    {\"client_column\": \"...\", \"schema_column\": \"...\", \"confidence\": 0.0}\n" +
-                            "  ],\n" +
-                            "  \"not_found\": [\"...\"]\n" +
+                            "    {\n" +
+                            "      \"client_column\": \"...\",\n" +
+                            "      \"schema_column\": \"...\",\n" +
+                            "      \"confidence\": 0.0,\n" +
+                            "      \"client_value\": \"...\",\n" +
+                            "      \"schema_value\": \"...\",\n" +
+                            "      \"value_match\": \"match | weak | conflict\",\n" +
+                            "      \"reasoning\": \"short explanation\"\n" +
+                            "    }\n" +
+                            "  ]\n" +
                             "}\n" +
                             "\n" +
                             "RULE:\n" +
-                            "If unsure → NOT MATCH.\n" +
+                            "- Only include VALID matches (confidence > 0.6)\n" +
+                            "- reasoning MUST include:\n" +
+                            "  - name similarity type\n" +
+                            "  - value comparison result\n" +
+                            "- If unsure → SKIP (do not output)\n" +
                             "\n" +
                             "DATA:\n" +
                             dataJson;
@@ -452,57 +504,34 @@ public class AiBaseKnowledgeService {
             Files.createDirectories(directory);
         }
 
-        ObjectMapper mapper = new ObjectMapper();
-
-        // 🔥 inject color dulu
+        // inject color dulu
         content = addColorBasedOnConfidence(content);
 
-        Path filePath;
+        // 🔥 1 file per type (tanpa timestamp)
+        String fileName = type.toLowerCase() + ".md";
+        Path filePath = directory.resolve(fileName);
 
-        if ("client2be".equalsIgnoreCase(type)) {
+        // 🔥 separator antar result
+        String separator = "\n\n--- NEW RESULT ---\n\n";
 
-            // ✅ 1 file saja (no timestamp)
-            filePath = directory.resolve("client2be.md");
+        String finalContent;
 
-            JsonNode newData = mapper.readTree(content);
-            ArrayNode finalArray;
-
-            if (Files.exists(filePath)) {
-                String existing = Files.readString(filePath);
-
-                if (existing.isBlank()) {
-                    finalArray = mapper.createArrayNode();
-                } else {
-                    finalArray = (ArrayNode) mapper.readTree(existing);
-                }
-            } else {
-                finalArray = mapper.createArrayNode();
-            }
-
-            // tambah data
-            finalArray.add(newData);
-
-            // overwrite biar tetap valid JSON array
-            Files.writeString(
-                    filePath,
-                    mapper.writerWithDefaultPrettyPrinter().writeValueAsString(finalArray),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING
-            );
-
+        if (Files.exists(filePath)) {
+            // append dengan separator
+            finalContent = separator + content;
         } else {
-
-            // default pakai timestamp
-            String timestamp = LocalDateTime.now()
-                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
-
-            String fileName = type + "_" + timestamp + ".md";
-            filePath = directory.resolve(fileName);
-
-            Files.writeString(filePath, content, StandardOpenOption.CREATE);
+            // file baru tanpa separator di awal
+            finalContent = content;
         }
 
-        System.out.println("File saved: " + filePath.toAbsolutePath());
+        Files.writeString(
+                filePath,
+                finalContent,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND
+        );
+
+        System.out.println("File appended: " + filePath.toAbsolutePath());
     }
 
     private String addColorBasedOnConfidence(String json) {
