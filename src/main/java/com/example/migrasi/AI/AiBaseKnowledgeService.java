@@ -354,59 +354,44 @@ public class AiBaseKnowledgeService {
                     "ONLY OUTPUT JSON.\n" +
                             "\n" +
                             "TASK:\n" +
-                            "Match each column field in `client_columns` to `schema_columns` using STRICT name similarity.\n" +
-                            "\n" +
-                            "RULES:\n" +
-                            "- Match ONLY based on column names\n" +
-                            "- NO semantic guessing\n" +
-                            "- NO invented relationships\n" +
+                            "Match `client_columns` to `schema_columns` using STRICT name similarity.\n" +
                             "\n" +
                             "NORMALIZATION:\n" +
                             "- lowercase\n" +
-                            "- remove spaces & underscores\n" +
-                            "- strip common affixes: id, _id\n" +
+                            "- remove spaces and underscores\n" +
+                            "- remove suffix: id, _id\n" +
                             "\n" +
                             "ALLOWED MATCH:\n" +
                             "1. Exact normalized match → 1.0\n" +
-                            "2. Minor variation (username = user_name) → 0.8\n" +
-                            "3. Strict common synonym ONLY:\n" +
-                            "   - name = nama\n" +
-                            "   - description = keterangan\n" +
-                            "   - email = email\n" +
-                            "   - phone = telepon\n" +
-                            "   - branch = cabang / kanwil\n" +
+                            "2. Minor format variation (username = user_name) → 0.8\n" +
+                            "3. Strict synonyms ONLY:\n" +
+                            "   name = nama\n" +
+                            "   description = keterangan\n" +
+                            "   email = email\n" +
+                            "   phone = telepon\n" +
+                            "   branch = cabang / kanwil\n" +
                             "\n" +
-                            "PROHIBITED:\n" +
-                            "- semantic/context-based matching\n" +
-                            "- unrelated mappings\n" +
-                            "- forcing matches\n" +
-                            "- generic matches (id, name) unless exact\n" +
+                            "REJECT IF:\n" +
+                            "- not clearly similar by name\n" +
+                            "- semantic/context guess\n" +
+                            "- partial match\n" +
+                            "- generic fields (id, name) unless exact\n" +
                             "\n" +
                             "CONFIDENCE:\n" +
-                            "- 1.0 exact\n" +
-                            "- 0.8 strong variation/synonym\n" +
-                            "- 0.6 borderline acceptable\n" +
-                            "- ≤0.3 = NO MATCH\n" +
+                            "- 1.0 = exact\n" +
+                            "- 0.8 = variation/synonym\n" +
+                            "- ≤0.6 = NO MATCH\n" +
                             "\n" +
                             "OUTPUT:\n" +
-                            "- Include ONLY matches > 0.6\n" +
-                            "- Otherwise → `not_found`\n" +
-                            "- Many unmatched is OK\n" +
-                            "\n" +
-                            "FORMAT:\n" +
                             "{\n" +
                             "  \"discovery\": [\n" +
-                            "    {\n" +
-                            "      \"client_column\": \"...\",\n" +
-                            "      \"schema_column\": \"...\",\n" +
-                            "      \"confidence\": 0.0\n" +
-                            "    }\n" +
+                            "    {\"client_column\": \"...\", \"schema_column\": \"...\", \"confidence\": 0.0}\n" +
                             "  ],\n" +
                             "  \"not_found\": [\"...\"]\n" +
                             "}\n" +
                             "\n" +
-                            "FINAL RULE:\n" +
-                            "If not clearly justified by NAME similarity → DO NOT MATCH.\n" +
+                            "RULE:\n" +
+                            "If unsure → NOT MATCH.\n" +
                             "\n" +
                             "DATA:\n" +
                             dataJson;
