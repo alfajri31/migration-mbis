@@ -25,11 +25,11 @@ public class ValidationFeToBeService {
 
         String jsonString = databaseImportService.exportDatabase(Set.of("log_table"));
 
-        HashMap<String,List<String>> map = new HashMap<>();
-
-        map.put("schema_db", addDetailsKnowledge(jsonString));
+        HashMap<String,List<String>> map = new LinkedHashMap<>();
 
         map.put("frontend",addImagesKnowledges());
+
+        map.put("schema_db", addDetailsKnowledge(jsonString));
 
         basesKnowledge.putAll(map);
 

@@ -27,11 +27,11 @@ public class ValidationExcelToBeService {
 
         String jsonStringExcel = excelImportService.scanDirectoryAsJson("C:\\Users\\alfaj\\Projects\\mbis\\migration-mbis\\src\\main\\resources\\excel");
 
-        HashMap<String,List<String>> map = new HashMap<>();
-
-        map.put("schema_db", addDetailsKnowledge(jsonStringDb));
+        HashMap<String,List<String>> map = new LinkedHashMap<>();
 
         map.put("client_data",addDetailsExcelKnowledge(jsonStringExcel));
+
+        map.put("schema_db", addDetailsKnowledge(jsonStringDb));
 
         basesKnowledge.putAll(map);
 

@@ -297,6 +297,7 @@ public class AiBaseKnowledgeService {
             for (int i = 0; i < dataBatch; i++) {
 
                 int start = i * batchSize;
+
                 int end = Math.min(start + batchSize, fullList.size());
 
                 if (start >= fullList.size()) break;
@@ -335,6 +336,9 @@ public class AiBaseKnowledgeService {
             systemPrompt = """
                         OUTPUT HARUS JSON SAJA TANPA PENJELASAN.
                         
+                        LARANGAN:
+                        LARANGAN RESPONS USER KETIKA DATA DARI ROLE USER DI KOLOM CHAT TIDAK ADA!!
+                            
                         PERAN:
                         AI untuk mapping field kosong dari frontend ke schema database.
                         
@@ -342,16 +346,15 @@ public class AiBaseKnowledgeService {
                         - Cari field schema_db yang paling cocok untuk mengisi field frontend yang kosong
                         
                         KRITERIA:
-                        - Nama field 
+                        - Nama field
                         - Value field
                         
                         FORMAT OUTPUT:
                         {
-                          "fe_field": "...",
-                          "fe_value": "...",
+                          "fe_field_empty": "...",
                           "existing_table_name": "...",
                           "existing_table_field_name": "...",
-                          "confidence": "high | medium | low",
+                          "field_existing": "high exist | medium exist | low exist",
                           "reason": "..."
                         }
                         
@@ -404,15 +407,19 @@ public class AiBaseKnowledgeService {
             systemPrompt = """
                             OUTPUT HARUS BERUPA JSON SAJA. TANPA PENJELASAN ATAU TEKS TAMBAHAN.
                             
+                            LARANGAN:
+                            LARANGAN RESPONS USER KETIKA DATA DARI ROLE USER DI KOLOM CHAT TIDAK ADA!!
+                            
                             PERAN:
                             AI untuk mencocokkan field antara:
                             1. client_data
                             2. schema_db
+                         
                             
                             TUJUAN:
-                            - Cari pasangan field paling relevan
-                            - Jika tidak ada yang cocok, skip!!
+                            - Cari pasangan kolom and value antar key entry paling relevan
                             
+             
                             KRITERIA:
                             - Nama kolom
                             - Value kolom
@@ -422,8 +429,9 @@ public class AiBaseKnowledgeService {
                               "client_column_name": "...",
                               "client_sample_data": "...",
                               "existing_table_name": "...",
-                              "existing_table_field_value": "...",
-                              "summary_confidence": "high | medium | low",
+                              "existing_column_name": "...",
+                              "existing_column_field_value": "...",
+                              "relevant_confidence": "high | medium | low",
                               "reason": "..."
                             }
                             
@@ -541,7 +549,7 @@ public class AiBaseKnowledgeService {
                             field: %s
                             value: %s
                             
-                            Apakah field ini sudah terisi di:
+                            Apakah field ini ada di:
                             column: %s
                             table: %s ?
                             
