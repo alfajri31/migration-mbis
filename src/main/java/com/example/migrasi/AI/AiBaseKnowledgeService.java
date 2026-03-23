@@ -336,6 +336,9 @@ public class AiBaseKnowledgeService {
             systemPrompt = """
                         OUTPUT HARUS JSON SAJA TANPA PENJELASAN.
                         
+                        SUMBER DATA:
+                        client_data sebagai pusat key entry nya
+                        
                         LARANGAN:
                         LARANGAN RESPONS USER KETIKA DATA DARI ROLE USER DI KOLOM CHAT TIDAK ADA!!
                             
@@ -343,7 +346,7 @@ public class AiBaseKnowledgeService {
                         AI untuk mapping field kosong dari frontend ke schema database.
                         
                         TUJUAN:
-                        - Cari field schema_db yang paling cocok untuk mengisi field frontend yang kosong
+                        Cari field schema_db yang paling cocok untuk mengisi field frontend yang kosong
                         
                         KRITERIA:
                         - Nama field
@@ -405,40 +408,41 @@ public class AiBaseKnowledgeService {
             List<String> userPrompts = buildPromptClient2Be(dataJson);
 
             systemPrompt = """
-                            OUTPUT HARUS BERUPA JSON SAJA. TANPA PENJELASAN ATAU TEKS TAMBAHAN.
-                            
-                            LARANGAN:
-                            LARANGAN RESPONS USER KETIKA DATA DARI ROLE USER DI KOLOM CHAT TIDAK ADA!!
-                            
-                            PERAN:
-                            AI untuk mencocokkan field antara:
-                            1. client_data
-                            2. schema_db
-                         
-                            
-                            TUJUAN:
-                            - Cari pasangan kolom and value antar key entry paling relevan
-                            
-             
-                            KRITERIA:
-                            - Nama kolom
-                            - Value kolom
-                            
-                            FORMAT OUTPUT:
-                            {
-                              "client_column_name": "...",
-                              "client_sample_data": "...",
-                              "existing_table_name": "...",
-                              "existing_column_name": "...",
-                              "existing_column_field_value": "...",
-                              "relevant_confidence": "high | medium | low",
-                              "reason": "..."
-                            }
-                            
-                            CATATAN:
-                            - Hanya JSON
-                            - Hanya mapping yang valid
-                            """;
+                        OUTPUT HARUS BERUPA JSON SAJA. TANPA PENJELASAN ATAU TEKS TAMBAHAN.
+                        
+                        SUMBER DATA:
+                        - client_data sebagai acuan utama
+                        
+                        PERAN:
+                        AI untuk mencocokkan nama field antara:
+                        1. client_data
+                        2. schema_db
+                        
+                        TUJUAN:
+                        - Cari field di schema_db yang paling mirip dengan field di client_data
+                        - HANYA berdasarkan kemiripan nama field (string similarity)
+                        
+                        ATURAN:
+                        - Abaikan value (TIDAK PERLU DIPERTIMBANGKAN)
+                        - Fokus ke:
+                          - kesamaan kata (contoh: name vs full_name)
+                          - singkatan (contoh: id vs nip vs user_id)
+                          - pola umum database
+                        
+                        FORMAT OUTPUT:
+                        {
+                          "client_column_name": "...",
+                          "schema_db_table_name": "...",
+                          "schema_db_column_name": "...",
+                          "similarity_confidence": "high | medium | low",
+                          "reason": "..."
+                        }
+                        
+                        RULE:
+                        - Jika tidak mirip → SKIP (jangan dipaksa)
+                        - Jangan gunakan value
+                        - Hanya JSON
+                        """;
 
             for (String prompt : userPrompts) {
 
