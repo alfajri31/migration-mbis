@@ -1,7 +1,6 @@
 package com.example.migrasi.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -30,110 +29,158 @@ public class DatabaseImportService {
         try (Connection conn = dataSource.getConnection()) {
 
             DatabaseMetaData meta = conn.getMetaData();
+
+            // 🔥 ambil SEMUA table tanpa schema restriction
             ResultSet tables = meta.getTables(null, null, "%", new String[]{"TABLE"});
 
             while (tables.next()) {
+
+                String schema = tables.getString("TABLE_SCHEM");
                 String tableName = tables.getString("TABLE_NAME");
 
-                if (excludedTables.contains(tableName)) {
+                if (excludedTables != null && excludedTables.contains(tableName)) {
                     continue;
                 }
 
                 Map<String, Object> tableJson = new LinkedHashMap<>();
+                tableJson.put("schema", schema);
                 tableJson.put("table", tableName);
-                tableJson.put("ddl", getTableDDL(meta, tableName));
-                tableJson.put("rows", getTableData(conn, tableName, limit)); // 🔥 pakai limit
+                tableJson.put("ddl", getTableDDL(meta, schema, tableName));
+                tableJson.put("rows", getTableData(conn, schema, tableName, limit));
 
                 database.add(tableJson);
             }
 
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Error exporting database", e);
         }
 
         try {
             return objectMapper.writerWithDefaultPrettyPrinter()
                     .writeValueAsString(database);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Error converting to JSON", e);
         }
     }
 
-    private Map<String, Object> getTableDDL(DatabaseMetaData meta, String tableName) throws SQLException {
+    // =========================
+    // 🔥 DDL UNIVERSAL
+    // =========================
+    private Map<String, Object> getTableDDL(DatabaseMetaData meta, String schema, String tableName) {
 
         Map<String, Object> ddl = new LinkedHashMap<>();
 
-        // Columns
-        List<Map<String, Object>> columns = new ArrayList<>();
-        ResultSet cols = meta.getColumns(null, null, tableName, null);
+        try {
+            // Columns
+            List<Map<String, Object>> columns = new ArrayList<>();
+            ResultSet cols = meta.getColumns(null, schema, tableName, null);
 
-        while (cols.next()) {
-            Map<String, Object> col = new LinkedHashMap<>();
-            col.put("name", cols.getString("COLUMN_NAME"));
-            col.put("type", cols.getString("TYPE_NAME"));
-            col.put("size", cols.getInt("COLUMN_SIZE"));
-            col.put("nullable", cols.getInt("NULLABLE") == DatabaseMetaData.columnNullable);
+            while (cols.next()) {
+                Map<String, Object> col = new LinkedHashMap<>();
+                col.put("name", cols.getString("COLUMN_NAME"));
+                col.put("type", cols.getString("TYPE_NAME"));
+                col.put("size", cols.getInt("COLUMN_SIZE"));
+                col.put("nullable", cols.getInt("NULLABLE") == DatabaseMetaData.columnNullable);
 
-            columns.add(col);
+                columns.add(col);
+            }
+            ddl.put("columns", columns);
+
+        } catch (Exception e) {
+            ddl.put("columns_error", e.getMessage());
         }
 
-        ddl.put("columns", columns);
+        try {
+            // Primary Keys
+            List<String> pkList = new ArrayList<>();
+            ResultSet pk = meta.getPrimaryKeys(null, schema, tableName);
 
-        // Primary Key
-        List<String> pkList = new ArrayList<>();
-        ResultSet pk = meta.getPrimaryKeys(null, null, tableName);
+            while (pk.next()) {
+                pkList.add(pk.getString("COLUMN_NAME"));
+            }
+            ddl.put("primaryKey", pkList);
 
-        while (pk.next()) {
-            pkList.add(pk.getString("COLUMN_NAME"));
+        } catch (Exception e) {
+            ddl.put("pk_error", e.getMessage());
         }
 
-        ddl.put("primaryKey", pkList);
+        try {
+            // Foreign Keys
+            List<Map<String, Object>> fks = new ArrayList<>();
+            ResultSet fk = meta.getImportedKeys(null, schema, tableName);
 
-        // Foreign Keys
-        List<Map<String, Object>> fks = new ArrayList<>();
-        ResultSet fk = meta.getImportedKeys(null, null, tableName);
+            while (fk.next()) {
+                Map<String, Object> fkMap = new LinkedHashMap<>();
+                fkMap.put("column", fk.getString("FKCOLUMN_NAME"));
+                fkMap.put("refTable", fk.getString("PKTABLE_NAME"));
+                fkMap.put("refColumn", fk.getString("PKCOLUMN_NAME"));
+                fks.add(fkMap);
+            }
+            ddl.put("foreignKeys", fks);
 
-        while (fk.next()) {
-
-            Map<String, Object> fkMap = new LinkedHashMap<>();
-
-            fkMap.put("column", fk.getString("FKCOLUMN_NAME"));
-            fkMap.put("refTable", fk.getString("PKTABLE_NAME"));
-            fkMap.put("refColumn", fk.getString("PKCOLUMN_NAME"));
-
-            fks.add(fkMap);
+        } catch (Exception e) {
+            ddl.put("fk_error", e.getMessage());
         }
-
-        ddl.put("foreignKeys", fks);
 
         return ddl;
     }
 
     // =========================
-    // 🔥 DATA TABLE (LIMITED)
+    // 🔥 DATA UNIVERSAL (SUPER SAFE)
     // =========================
-    private List<Map<String, Object>> getTableData(Connection conn, String tableName, int limit) throws SQLException {
+    private List<Map<String, Object>> getTableData(Connection conn, String schema, String tableName, int limit) {
 
         List<Map<String, Object>> rows = new ArrayList<>();
 
-        // 🔥 Query pakai LIMIT
-        String query = "SELECT * FROM " + tableName + " LIMIT " + limit;
+        try {
 
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
+            DatabaseMetaData meta = conn.getMetaData();
 
-            ResultSetMetaData meta = rs.getMetaData();
-            int columnCount = meta.getColumnCount();
-
-            while (rs.next()) {
-                Map<String, Object> row = new LinkedHashMap<>();
-
-                for (int i = 1; i <= columnCount; i++) {
-                    row.put(meta.getColumnName(i), rs.getObject(i));
-                }
-
-                rows.add(row);
+            // 🔥 universal quote (penting banget)
+            String quote = meta.getIdentifierQuoteString();
+            if (quote == null || quote.trim().isEmpty()) {
+                quote = "\""; // fallback
             }
+
+            String fullTableName;
+
+            if (schema != null && !schema.isEmpty()) {
+                fullTableName = quote + schema + quote + "." + quote + tableName + quote;
+            } else {
+                fullTableName = quote + tableName + quote;
+            }
+
+            String query = "SELECT * FROM " + fullTableName;
+
+            try (Statement stmt = conn.createStatement()) {
+
+                // 🔥 UNIVERSAL LIMIT
+                stmt.setMaxRows(limit);
+
+                try (ResultSet rs = stmt.executeQuery(query)) {
+
+                    ResultSetMetaData rsMeta = rs.getMetaData();
+                    int columnCount = rsMeta.getColumnCount();
+
+                    while (rs.next()) {
+
+                        Map<String, Object> row = new LinkedHashMap<>();
+
+                        for (int i = 1; i <= columnCount; i++) {
+                            String colName = rsMeta.getColumnLabel(i);
+                            Object value = rs.getObject(i);
+                            row.put(colName, value);
+                        }
+
+                        rows.add(row);
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Failed to fetch data: " + e.getMessage());
+            rows.add(error);
         }
 
         return rows;

@@ -16,10 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -56,21 +53,15 @@ public class AiBaseKnowledgeService {
 
         List<String> partialSummaries = mapPhase(data, mapper, safeContextWindow);
 
-        log.info("MAP PHASE DONE. Total partial summaries: {}", partialSummaries.size());
-
         Map<String, Object> structuredData = buildStructuredData(data, partialSummaries, mapper);
-
-        String finalResult;
 
         int autoBatch = calculateBatchCountSmart(structuredData);
 
         if (autoBatch > 1) {
-            finalResult = processBatch(structuredData, mapper, type,autoBatch);
+            processBatch(structuredData, mapper, type,autoBatch);
         } else {
-            finalResult = processSingle(structuredData, mapper, type);
+            processSingle(structuredData, mapper, type);
         }
-
-        log.info("FINAL RESULT:\n{}", finalResult);
     }
 
     private int calculateBatchCountSmart(Map<String, Object> structuredData) {
@@ -199,12 +190,11 @@ public class AiBaseKnowledgeService {
             List<Object> data = merged.getOrDefault(key, new ArrayList<>());
 
             // 🔥 SPECIAL HANDLING schema_db
-//            if ("schema_db".equals(key)) {
-//                structuredData.put(key, transformSchemaDb(data));
-//            } else {
-//                structuredData.put(key, data);
-//            }
-            structuredData.put(key, data);
+            if ("schema_db".equals(key)) {
+                structuredData.put(key, transformSchemaDb(data));
+            } else {
+                structuredData.put(key, data);
+            }
         }
 
         return structuredData;
@@ -245,7 +235,7 @@ public class AiBaseKnowledgeService {
     // =========================
     // BATCH PROCESSING
     // =========================
-    private String processBatch(Map<String, Object> structuredData,
+    private void processBatch(Map<String, Object> structuredData,
                                 ObjectMapper mapper,
                                 String type,
                                 int dataBatch) throws Exception {
@@ -282,20 +272,13 @@ public class AiBaseKnowledgeService {
 
                 log.info("Combine: {} batch {} WITH {} batch {}", key1, i + 1, key2, j + 1);
 
-                String result = callSummary(
+                callSummary(
                         mapper.writeValueAsString(batchData),
-                        0,
-                        0,
                         type
                 );
 
-                saveToFile(result, type);
-
-                finalResult.append(result).append("\n");
             }
         }
-
-        return finalResult.toString();
     }
 
     // =========================
@@ -333,33 +316,28 @@ public class AiBaseKnowledgeService {
     // =========================
     // SINGLE PROCESS
     // =========================
-    private String processSingle(Map<String, Object> structuredData,
+    private void processSingle(Map<String, Object> structuredData,
                                  ObjectMapper mapper,
                                  String type) throws Exception {
 
-        int size = ((List<?>) structuredData.values().iterator().next()).size();
-
-        String result = callSummary(
+        callSummary(
                 mapper.writeValueAsString(structuredData),
-                size,
-                size,
                 type
         );
 
-        saveToFile(result, type);
-
-        return result;
     }
 
-    private String callSummary(String dataJson,int chunkIndex,int totalChunkSize,String type) {
+    private void callSummary(String dataJson, String type) throws Exception {
 
         String systemPrompt="";
 
         String userPrompt="";
 
-        List<Map<String, Object>> messages = new ArrayList<>();
-
         if(type.equals("fe2be")) {
+
+            Map<String, Object> request = new HashMap<>();
+
+            List<Map<String, Object>> messages = new ArrayList<>();
 
             systemPrompt ="" +
                     "Kamu adalah AI yang bertugas melakukan validasi antara key fields frontend (FE) dan key schema_database. " +
@@ -369,115 +347,94 @@ public class AiBaseKnowledgeService {
 
 
             userPrompt =
-                    "\"Bandingkan fields dari key 'frontend' dengan key 'schema_db', " +
+                    "\"Bandingkan fields dari key klien 'client' dengan key db 'schema_db', " +
                             "lalu tampilkan field yang tidak " +
                             "konsisten antar " +
                             "data pada key " +
                             "(tidak ada di schema_db, typo, atau mismatch penamaan di schema_db, dan lain lain)." +
                             "\"\n\n"+dataJson;
+
+            messages.add(Map.of(
+                    "role", "system",
+                    "content",systemPrompt
+            ));
+            messages.add(Map.of(
+                    "role", "user",
+                    "content", userPrompt
+            ));
+
+            request.put("model", aiModel);
+
+            request.put("messages", messages);
+
+            request.put("stream", false);
         }
 
         if(type.equals("client2be")) {
 
+            List<String> prompts = buildPromptList(dataJson);
+
             systemPrompt =
-                    "You are a strict JSON generator.\n" +
+                    "Kamu adalah AI yang bertugas melakukan mapping antara field dari client dengan field dari database schema.\n" +
                             "\n" +
-                            "You must output ONLY valid JSON.\n" +
-                            "No explanation.\n" +
-                            "No text outside JSON.\n" +
+                            "Tugas kamu:\n" +
+                            "- Menilai tingkat kemiripan (confidence) antara dua field: field A (client) dan field B (schema).\n" +
+                            "- Berikan nilai confidence dari 0 sampai 1:\n" +
+                            "  - 1 = sangat yakin (makna sama persis)\n" +
+                            "  - 0.7 - 0.9 = sangat mirip (hampir sama)\n" +
+                            "  - 0.4 - 0.6 = cukup relevan\n" +
+                            "  - 0.1 - 0.3 = sedikit berkaitan\n" +
+                            "  - 0 = tidak ada hubungan\n" +
                             "\n" +
-                            "If output is invalid JSON, you have failed.";
-
-            userPrompt =
-                    "ONLY OUTPUT JSON.\n" +
+                            "Aturan penting:\n" +
+                            "- Gunakan pemahaman SEMANTIK (arti kata), bukan hanya kesamaan teks.\n" +
+                            "- Pertimbangkan konteks umum database (contoh: Email → email, Username → user_name, Password → password_hash).\n" +
+                            "- Field \"id\" biasanya adalah primary key, cocok dengan field yang berfungsi sebagai identifier.\n" +
+                            "- Abaikan perbedaan huruf besar/kecil dan simbol.\n" +
+                            "- Jika field client jelas tidak berhubungan dengan schema, beri nilai rendah (0 atau mendekati 0).\n" +
                             "\n" +
-                            "TASK:\n" +
-                            "Match client_columns to schema_db columns using name and sample_data.\n" +
-                            "\n" +
-                            "CONTEXT:\n" +
-                            "- This is partial (batched) data\n" +
-                            "- Use best guess if needed\n" +
-                            "\n" +
-                            "IMPORTANT:\n" +
-                            "- schema_value MUST be actual row data\n" +
-                            "- DO NOT use column name or data type (e.g. 'uuid', 'string', 'int') as value\n" +
-                            "- If only type is available → treat as no value\n" +
-                            "\n" +
-                            "RULES:\n" +
-                            "- normalize: lowercase, remove spaces, underscores, 'id'\n" +
-                            "- if no value, rely on name similarity only\n" +
-                            "\n" +
-                            "CONFIDENCE:\n" +
-                            "- exact name + valid value match → high\n" +
-                            "- partial name or no value → medium\n" +
-                            "- unclear → low\n" +
-                            "\n" +
-                            "OUTPUT:\n" +
+                            "Output WAJIB dalam format JSON TANPA penjelasan tambahan:\n" +
                             "{\n" +
-                            "  \"found\": [\n" +
-                            "    {\n" +
-                            "      \"client_column\": \"...\",\n" +
-                            "      \"schema_column\": \"...\",\n" +
-                            "      \"confidence\": \"high\",\n" +
-                            "      \"client_value\": \"...\",\n" +
-                            "      \"schema_value\": \"...\",\n" +
-                            "      \"reasoning\": \"...\"\n" +
-                            "    }\n" +
-                            "  ],\n" +
-                            "  \"not_found\": [\n" +
-                            "    {\n" +
-                            "      \"client_column\": \"...\",\n" +
-                            "      \"reason\": \"low confidence or no valid value\"\n" +
-                            "    }\n" +
-                            "  ]\n" +
-                            "}\n" +
-                            "\n" +
-                            "RULE:\n" +
-                            "- ONLY high goes to found\n" +
-                            "\n" +
-                            "REASONING:\n" +
-                            "- mention name match\n" +
-                            "- mention if value is valid or missing\n" +
-                            "\n" +
-                            "DATA:\n" +
-                            dataJson;
-        }
+                            "  \"client_field\": \"<nama field client>\",\n" +
+                            "  \"schema_field\": \"<nama field schema>\",\n" +
+                            "  \"confidence\": <angka 0 - 1>\n" +
+                            "}";
 
+            for (int i = 0; i < prompts.size(); i++) {
 
-        messages.add(Map.of(
-                "role", "system",
-                "content",systemPrompt
-        ));
-        messages.add(Map.of(
-                "role", "user",
-                "content", userPrompt
-        ));
+                Map<String, Object> request = new HashMap<>();
 
-        Map<String, Object> request = new HashMap<>();
+                List<Map<String, Object>> messages = new ArrayList<>();
 
-        request.put("model", aiModel);
+                messages.add(Map.of(
+                        "role", "system",
+                        "content", systemPrompt
+                ));
 
-        request.put("messages", messages);
+                messages.add(Map.of(
+                        "role", "user",
+                        "content", prompts.get(i)
+                ));
 
-        request.put("stream", false);
+                request.put("model", aiModel);
+                request.put("messages", messages);
+                request.put("stream", false);
 
-        try {
-            log.info(request.get("messages").toString());
+                log.info("Request prompt: {}", prompts.get(i));
 
-            ResponseEntity<Map> response =
-                    restTemplate.postForEntity(url, request, Map.class);
+                ResponseEntity<Map> response =
+                        restTemplate.postForEntity(url, request, Map.class);
 
-            Map body = response.getBody();
+                Map body = response.getBody();
 
-            Map message = (Map) body.get("message");
+                Map message = (Map) body.get("message");
 
-            log.info("response complete chunk at index - {} of {}", chunkIndex,totalChunkSize);
+                String content = message.get("content").toString();
 
-            return message.get("content").toString();
+                saveToFile(content, type);
 
-        } catch (Exception e) {
-            log.error("Error callAI: {}", e.getMessage());
-            return "ERROR: " + e.getMessage();
+                log.info("response complete index {} of {}", i + 1, prompts.size());
+            }
         }
     }
 
@@ -570,6 +527,52 @@ public class AiBaseKnowledgeService {
             e.printStackTrace();
             return json;
         }
+    }
+
+    public List<String> buildPromptList(String jsonData) {
+        List<String> prompts = new ArrayList<>();
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(jsonData);
+
+            JsonNode clientData = root.path("client_data");
+            JsonNode schemaDb = root.path("schema_db");
+
+            // Loop semua client_data
+            for (JsonNode client : clientData) {
+                JsonNode clientColumns = client.path("client_columns");
+
+                // Loop semua schema_db
+                for (JsonNode schema : schemaDb) {
+                    JsonNode schemaColumns = schema.path("schema_columns");
+
+                    // Loop schema columns
+                    for (JsonNode schemaCol : schemaColumns) {
+                        String schemaColumn = schemaCol.asText();
+
+                        // Loop client columns
+                        for (JsonNode clientCol : clientColumns) {
+                            String clientColumn = clientCol.asText();
+
+                            // Build prompt per item
+                            String prompt = "berapa tingkat konfident dari field "
+                                    + clientColumn
+                                    + " dengan field "
+                                    + schemaColumn
+                                    + " dari 0 - 1?";
+
+                            prompts.add(prompt);
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error parsing JSON", e);
+        }
+
+        return prompts;
     }
 
 
