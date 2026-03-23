@@ -3,8 +3,6 @@ package com.example.migrasi.AI;
 import com.example.migrasi.prompt.PromptLoader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -329,6 +327,8 @@ public class AiBaseKnowledgeService {
 
     private void callSummary(String dataJson, String type) throws Exception {
 
+        ObjectMapper mapper  = new ObjectMapper();
+
         String systemPrompt="";
 
         String userPrompt="";
@@ -339,12 +339,18 @@ public class AiBaseKnowledgeService {
 
             List<Map<String, Object>> messages = new ArrayList<>();
 
-            systemPrompt = """
+            systemPrompt = """                    
                     Kamu adalah AI yang bertugas melakukan validasi
                     antara items key frontend (FE) dan items key schema_database (DB).
                     Tugasmu adalah menemukan item yang empty string atau null dari items key FE
                     dan itu kamu harus tau mapping ke field mana yang cocok di item key schema_db.
-                    """;
+                    
+                    Output WAJIB dalam format JSON TANPA penjelasan tambahan:
+                    {
+                       item_fe_empty: "",
+                       field_schema_db_must_be_filled: "
+                    }                                                 
+                   """;
 
 
             userPrompt = """
@@ -379,7 +385,7 @@ public class AiBaseKnowledgeService {
 
             String content = message.get("content").toString();
 
-            saveToFile(content, type);
+//            saveToFile(content, type);
 
             log.info("response complete");
 
@@ -390,33 +396,30 @@ public class AiBaseKnowledgeService {
             List<String> prompts = buildPromptList(dataJson);
 
             systemPrompt =
-                    """
-                            RESPONSE HARUS JSON!
+                    """                            
+                            RESPONSE HARUS JSON SAJA NO ADDITIONAL EXPLANATION!
                             
-                            Kamu adalah AI yang bertugas melakukan mapping antara field A -> field key client_data dengan field B ->  field key dari schema_db
+                            Kamu adalah AI yang bertugas melakukan cek kemiripan nama field antara field A -> field key client_data dengan field B ->  field key dari schema_db
 
                             Tugas kamu:
                             - Menilai tingkat kemiripan (confidence) antara dua field: field A key client_data dan field B key schema_db.
-                            - Berikan nilai confidence dari 0 sampai 1:
-                              - 1 = sangat yakin (makna sama persis)
-                              - 0.7 - 0.9 = sangat mirip (hampir sama)
-                              - 0.4 - 0.6 = cukup relevan
-                              - 0.1 - 0.3 = sedikit berkaitan
-                              - 0 = tidak ada hubungan
+                            - Berikan nilai confidence dari zero sampai high:
+                              - high = yakin (makna sama persis)
+                              - medium = cukup relevan
+                              - low = sedikit relevan
+                              - zero = tidak relevan
 
                             Aturan penting:
-                            - Gunakan pemahaman SEMANTIK (arti kata), bukan hanya kesamaan teks.
                             - Pertimbangkan konteks umum database (contoh: Email → email, Username → user_name, Password → password_hash).
-                            - Field "id" biasanya adalah primary key, cocok dengan field yang berfungsi sebagai identifier.
                             - Abaikan perbedaan huruf besar/kecil dan simbol.
-                            - Jika field client jelas tidak berhubungan dengan schema, beri nilai rendah (0 atau mendekati 0).
+                            - Jika field client jelas tidak berhubungan dengan schema, beri nilai rendah zero.
 
                             Output WAJIB dalam format JSON TANPA penjelasan tambahan:
                             {
                               "client_field": "<nama field client>",
                               "schema_field": "<nama field schema>",
-                              "confidence": <angka 0 - 1>
-                              "reason": <alasan confidence nya>
+                              "confidence": <zero - high>,
+                              "reason": <alasan confidence atau alasan fuzzy>
                             }""";
 
             for (int i = 0; i < prompts.size(); i++) {
@@ -439,6 +442,8 @@ public class AiBaseKnowledgeService {
 
                 request.put("messages", messages);
 
+                request.put("temperature",0);
+
                 request.put("stream", false);
 
                 log.info("Request prompt: {}", prompts.get(i));
@@ -451,7 +456,12 @@ public class AiBaseKnowledgeService {
 
                 String content = message.get("content").toString();
 
-                saveToFile(content, type);
+                try {
+                    JsonNode node = mapper.readTree(content);
+                    saveToFile(node, type);
+                }catch (Exception e) {
+                    log.info("error json node {}", e.getMessage());
+                }
 
                 log.info("response complete index {} of {}", i + 1, prompts.size());
             }
@@ -464,7 +474,7 @@ public class AiBaseKnowledgeService {
         return text.length() / 3;
     }
 
-    private void saveToFile(String content, String type) throws Exception {
+    private void saveToFile(JsonNode node, String type) throws Exception {
 
         String folderPath = "summary";
         Path directory = Paths.get(folderPath);
@@ -473,31 +483,97 @@ public class AiBaseKnowledgeService {
             Files.createDirectories(directory);
         }
 
-        // 🔥 1 file per type (tanpa timestamp)
-        String fileName = type.toLowerCase() + ".md";
+        String fileName = type.toLowerCase() + ".html";
         Path filePath = directory.resolve(fileName);
 
-        // 🔥 separator antar result
-        String separator = "\n\n--- NEW RESULT ---\n\n";
+        boolean fileExists = Files.exists(filePath);
 
-        String finalContent;
+        StringBuilder header = new StringBuilder();
+        StringBuilder filterRow = new StringBuilder();
+        StringBuilder row = new StringBuilder();
 
-        if (Files.exists(filePath)) {
-            // append dengan separator
-            finalContent = separator + content;
-        } else {
-            // file baru tanpa separator di awal
-            finalContent = content;
+        // ambil field dinamis
+        List<String> keys = new ArrayList<>();
+        node.fieldNames().forEachRemaining(keys::add);
+
+        // HEADER
+        header.append("<tr>");
+        filterRow.append("<tr>");
+
+        for (String key : keys) {
+            header.append("<th>").append(key).append("</th>");
+            filterRow.append("<th><input type='text' onkeyup='filterTable(this, ")
+                    .append(keys.indexOf(key))
+                    .append(")' placeholder='Filter ").append(key).append("'></th>");
         }
+
+        header.append("</tr>");
+        filterRow.append("</tr>");
+
+        // ROW DATA
+        row.append("<tr>");
+        for (String key : keys) {
+            String value = node.path(key).asText();
+            row.append("<td>").append(value).append("</td>");
+        }
+        row.append("</tr>\n");
+
+        StringBuilder finalContent = new StringBuilder();
+
+        if (!fileExists) {
+            // HTML awal + script filter
+            finalContent.append("""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Table</title>
+<style>
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+input { width: 100%; box-sizing: border-box; }
+</style>
+
+<script>
+function filterTable(input, colIndex) {
+    const table = document.getElementById("myTable");
+    const tr = table.getElementsByTagName("tr");
+
+    for (let i = 2; i < tr.length; i++) { // skip header + filter row
+        let td = tr[i].getElementsByTagName("td")[colIndex];
+        if (td) {
+            let txtValue = td.textContent || td.innerText;
+            tr[i].style.display = txtValue.toLowerCase().includes(input.value.toLowerCase())
+                ? ""
+                : "none";
+        }
+    }
+}
+</script>
+
+</head>
+<body>
+
+<table id="myTable">
+<thead>
+""");
+
+            finalContent.append(header).append("\n");
+            finalContent.append(filterRow).append("\n");
+            finalContent.append("</thead>\n<tbody>\n");
+        }
+
+        // append row
+        finalContent.append(row);
 
         Files.writeString(
                 filePath,
-                finalContent,
+                finalContent.toString(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.APPEND
         );
 
-        System.out.println("File appended: " + filePath.toAbsolutePath());
+        System.out.println("HTML updated: " + filePath.toAbsolutePath());
     }
 
     public List<String> buildPromptList(String jsonData) {
@@ -532,7 +608,7 @@ public class AiBaseKnowledgeService {
                                     + clientColumn
                                     + " dengan field "
                                     + schemaColumn
-                                    + " dari 0 - 1?";
+                                    + " dari zero - high?";
 
                             prompts.add(prompt);
                         }
