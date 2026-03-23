@@ -42,47 +42,74 @@ public class AiBaseKnowledgeService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public void processKnowledgeBase(Map<String, List<String>> data,String type) throws Exception {
+    // =========================
+    // MAIN ENTRY
+    // =========================
+    public void processKnowledgeBase(Map<String, List<String>> data, String type) throws Exception {
 
         int safeContextWindow = contextWindow - 500;
 
-        int totalChunkCounts = 0;
-
-        int totalLength = 0;
-
-        for (List<String> list : data.values()) {
-
-            if(list.toArray().length < safeContextWindow) {
-
-                totalLength+= list.toArray().length;
-
-            }
-            totalChunkCounts += list.size();
-        }
-
-        int estimationSummaryTokens = totalChunkCounts * (totalLength * 3);
-
-        if (estimationSummaryTokens >= safeContextWindow) {
-
+        if (isTokenOverflow(data, safeContextWindow)) {
             log.warn("Can't be proceed: tokens will be overflow");
             return;
         }
 
         ObjectMapper mapper = new ObjectMapper();
 
-        List<String> partialSummaries = new ArrayList<>();
+        List<String> partialSummaries = mapPhase(data, mapper, safeContextWindow);
+
+        log.info("MAP PHASE DONE. Total partial summaries: {}", partialSummaries.size());
+
+        Map<String, Object> structuredData = buildStructuredData(data, partialSummaries, mapper);
+
+        String finalResult;
+
+        if (dataBatch > 1) {
+            finalResult = processBatch(structuredData, mapper, type);
+        } else {
+            finalResult = processSingle(structuredData, mapper, type);
+        }
+
+        log.info("FINAL RESULT:\n{}", finalResult);
+    }
+
+    // =========================
+    // TOKEN VALIDATION
+    // =========================
+    private boolean isTokenOverflow(Map<String, List<String>> data, int safeContextWindow) {
+
+        int totalChunkCounts = 0;
+        int totalLength = 0;
+
+        for (List<String> list : data.values()) {
+            if (list.size() < safeContextWindow) {
+                totalLength += list.size();
+            }
+            totalChunkCounts += list.size();
+        }
+
+        int estimationSummaryTokens = totalChunkCounts * (totalLength * 3);
+
+        return estimationSummaryTokens >= safeContextWindow;
+    }
+
+    // =========================
+    // MAP PHASE
+    // =========================
+    private List<String> mapPhase(Map<String, List<String>> data,
+                                  ObjectMapper mapper,
+                                  int safeContextWindow) throws Exception {
 
         log.info("START MAP PHASE (per chunk processing)");
 
-        int index=0;
+        List<String> partialSummaries = new ArrayList<>();
 
         for (Map.Entry<String, List<String>> entry : data.entrySet()) {
 
             String key = entry.getKey();
-
             List<String> chunks = entry.getValue();
 
-            log.info("total all size chunks: {} ",chunks.size());
+            log.info("total all size chunks: {}", chunks.size());
 
             for (String chunk : chunks) {
 
@@ -95,155 +122,195 @@ public class AiBaseKnowledgeService {
                 log.warn("Chunk tokens={}", estimatedTokens);
 
                 if (estimatedTokens > safeContextWindow) {
-
-                    log.warn("Chunk over context window, splitting... tokens={} SKIP! I assume this only data insert remnants", estimatedTokens);
-
+                    log.warn("Chunk over context window, skipping... tokens={}", estimatedTokens);
                     continue;
-
-                } else {
-                    partialSummaries.add(jsonChunk);
                 }
-                index++;
+
+                partialSummaries.add(jsonChunk);
             }
         }
 
-        log.info("MAP PHASE DONE. Total partial summaries: {}", partialSummaries.size());
+        return partialSummaries;
+    }
 
-        mapper = new ObjectMapper();
-
-        ObjectMapper finalMapper = mapper;
+    private Map<String, Object> buildStructuredData(Map<String, List<String>> originalData,
+                                                    List<String> partialSummaries,
+                                                    ObjectMapper mapper) {
 
         List<Object> parsed = partialSummaries.stream()
                 .map(s -> {
                     try {
-
-                        return finalMapper.readValue(s, Object.class);
-
+                        return mapper.readValue(s, Object.class);
                     } catch (Exception e) {
-
                         throw new RuntimeException(e);
                     }
                 })
                 .toList();
 
-        //grouped by
         Map<String, List<Object>> merged = new HashMap<>();
 
         for (Object obj : parsed) {
-
             Map<String, Object> map = (Map<String, Object>) obj;
 
             for (Map.Entry<String, Object> entry : map.entrySet()) {
-
-                if (entry.getValue() instanceof List) {
-
+                if (entry.getValue() instanceof List<?> list) {
                     merged.computeIfAbsent(entry.getKey(), k -> new ArrayList<>())
-
-                            .addAll((List<Object>) entry.getValue());
-
+                            .addAll(list);
                 }
             }
         }
 
-        // OPTIONAL: jaga urutan penting
         Map<String, Object> structuredData = new LinkedHashMap<>();
 
-        for (Map.Entry<String, List<String>> entry : data.entrySet()) {
-            structuredData.put(
-                    entry.getKey(),
-                    merged.getOrDefault(entry.getKey(), new ArrayList<>())
-            );
+        for (Map.Entry<String, List<String>> entry : originalData.entrySet()) {
+
+            String key = entry.getKey();
+            List<Object> data = merged.getOrDefault(key, new ArrayList<>());
+
+            // 🔥 SPECIAL HANDLING schema_db
+            if ("schema_db".equals(key)) {
+                structuredData.put(key, transformSchemaDb(data));
+            } else {
+                structuredData.put(key, data);
+            }
         }
+
+        return structuredData;
+    }
+
+    private List<Map<String, Object>> transformSchemaDb(List<Object> schemaList) {
+
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (Object obj : schemaList) {
+
+            Map<String, Object> tableMap = (Map<String, Object>) obj;
+
+            String tableName = (String) tableMap.get("table");
+
+            Map<String, Object> ddl = (Map<String, Object>) tableMap.get("ddl");
+            List<Map<String, Object>> columns =
+                    (List<Map<String, Object>>) ddl.get("columns");
+
+            List<String> fields = columns.stream()
+                    .map(col -> (String) col.get("name"))
+                    .toList();
+
+            List<Map<String, Object>> rows =
+                    (List<Map<String, Object>>) tableMap.get("rows");
+
+            Map<String, Object> formatted = new LinkedHashMap<>();
+            formatted.put("table", tableName);
+            formatted.put("schema_columns", fields);
+            formatted.put("sample_data", rows);
+
+            result.add(formatted);
+        }
+
+        return result;
+    }
+
+    // =========================
+    // BATCH PROCESSING
+    // =========================
+    private String processBatch(Map<String, Object> structuredData,
+                                ObjectMapper mapper,
+                                String type) throws Exception {
+
+        Map<String, List<List<?>>> batchedData = splitBatches(structuredData);
+
+        List<String> keys = new ArrayList<>(batchedData.keySet());
+
+        if (keys.size() < 2) {
+            throw new IllegalStateException("Minimal harus ada 2 key untuk kombinasi");
+        }
+
+        String key1 = keys.get(0);
+        String key2 = keys.get(1);
+
+        List<List<?>> key1Batches = batchedData.get(key1);
+        List<List<?>> key2Batches = batchedData.get(key2);
+
+        int totalCombination = key1Batches.size() * key2Batches.size();
+        log.info("TOTAL KOMBINASI: {}", totalCombination);
 
         StringBuilder finalResult = new StringBuilder();
 
-        if (dataBatch > 1) {
+        for (int i = 0; i < key1Batches.size(); i++) {
+            for (int j = 0; j < key2Batches.size(); j++) {
 
-            // =========================
-            // STEP 1: SPLIT PER KEY
-            // =========================
-            Map<String, List<List<?>>> batchedData = new LinkedHashMap<>();
+                Map<String, Object> batchData = Map.of(
+                        key1, key1Batches.get(i),
+                        key2, key2Batches.get(j)
+                );
 
-            int totalSize = ((List<?>) structuredData.values().iterator().next()).size();
+                log.info("Combine: {} batch {} WITH {} batch {}", key1, i + 1, key2, j + 1);
 
-            int batchSize = (int) Math.ceil((double) totalSize / dataBatch);
+                String result = callSummary(
+                        mapper.writeValueAsString(batchData),
+                        0,
+                        0,
+                        type
+                );
 
-            for (Map.Entry<String, Object> entry : structuredData.entrySet()) {
-
-                List<?> fullList = (List<?>) entry.getValue();
-                List<List<?>> batches = new ArrayList<>();
-
-                for (int i = 0; i < dataBatch; i++) {
-
-                    int start = i * batchSize;
-                    int end = Math.min(start + batchSize, fullList.size());
-
-                    if (start >= fullList.size()) break;
-
-                    batches.add(fullList.subList(start, end));
-                }
-
-                batchedData.put(entry.getKey(), batches);
+                saveToFile(result, type);
+                finalResult.append(result).append("\n");
             }
-
-            // =========================
-            // STEP 2: CROSS COMBINATION
-            // =========================
-            List<String> keys = new ArrayList<>(batchedData.keySet());
-
-            if (keys.size() < 2) {
-                throw new IllegalStateException("Minimal harus ada 2 key untuk kombinasi");
-            }
-
-            String key1 = keys.get(0);
-            String key2 = keys.get(1);
-
-            List<List<?>> key1Batches = batchedData.get(key1);
-
-            List<List<?>> key2Batches = batchedData.get(key2);
-
-            int totalCombination = key1Batches.size() * key2Batches.size();
-
-            log.info("TOTAL KOMBINASI: {}", totalCombination);
-
-            for (int i = 0; i < key1Batches.size(); i++) {
-
-                for (int j = 0; j < key2Batches.size(); j++) {
-
-                    Map<String, Object> batchData = new LinkedHashMap<>();
-
-                    batchData.put(key1, key1Batches.get(i));
-
-                    batchData.put(key2, key2Batches.get(j));
-
-                    log.info("Combine: {} batch {} WITH {} batch {}", key1, i + 1, key2, j + 1);
-
-                    String result = callSummary(
-                            mapper.writeValueAsString(batchData),
-                            0,
-                            0,
-                            type
-                    );
-
-                    saveToFile(result, type);
-
-                    finalResult.append(result).append("\n");
-                }
-            }
-
-        } else {
-
-            finalResult = new StringBuilder(callSummary(
-                    mapper.writeValueAsString(structuredData),
-                    index,
-                    ((List<?>) structuredData.values().iterator().next()).size(),
-                    type
-            ));
-
-            saveToFile(finalResult.toString(), type);
         }
 
-        log.info("FINAL RESULT:\n{}", finalResult);
+        return finalResult.toString();
+    }
+
+    // =========================
+    // SPLIT BATCH
+    // =========================
+    private Map<String, List<List<?>>> splitBatches(Map<String, Object> structuredData) {
+
+        Map<String, List<List<?>>> batchedData = new LinkedHashMap<>();
+
+        int totalSize = ((List<?>) structuredData.values().iterator().next()).size();
+        int batchSize = (int) Math.ceil((double) totalSize / dataBatch);
+
+        for (Map.Entry<String, Object> entry : structuredData.entrySet()) {
+
+            List<?> fullList = (List<?>) entry.getValue();
+            List<List<?>> batches = new ArrayList<>();
+
+            for (int i = 0; i < dataBatch; i++) {
+
+                int start = i * batchSize;
+                int end = Math.min(start + batchSize, fullList.size());
+
+                if (start >= fullList.size()) break;
+
+                batches.add(fullList.subList(start, end));
+            }
+
+            batchedData.put(entry.getKey(), batches);
+        }
+
+        return batchedData;
+    }
+
+    // =========================
+    // SINGLE PROCESS
+    // =========================
+    private String processSingle(Map<String, Object> structuredData,
+                                 ObjectMapper mapper,
+                                 String type) throws Exception {
+
+        int size = ((List<?>) structuredData.values().iterator().next()).size();
+
+        String result = callSummary(
+                mapper.writeValueAsString(structuredData),
+                size,
+                size,
+                type
+        );
+
+        saveToFile(result, type);
+
+        return result;
     }
 
     private String callSummary(String dataJson,int chunkIndex,int totalChunkSize,String type) {
@@ -287,42 +354,59 @@ public class AiBaseKnowledgeService {
                     "ONLY OUTPUT JSON.\n" +
                             "\n" +
                             "TASK:\n" +
-                            "Match each schema_column to the most similar client_field.\n" +
+                            "Match each column field in `client_columns` to `schema_columns` using STRICT name similarity.\n" +
                             "\n" +
-                            "MATCHING RULES:\n" +
-                            "- Use column name similarity (string + semantic allowed)\n" +
-                            "- You MAY normalize text (lowercase, remove underscore, etc.)\n" +
-                            "- You MAY use common synonyms (name=nama, phone=telepon, branch=cabang, etc.)\n" +
-                            "- Do NOT use sample data\n" +
+                            "RULES:\n" +
+                            "- Match ONLY based on column names\n" +
+                            "- NO semantic guessing\n" +
+                            "- NO invented relationships\n" +
                             "\n" +
-                            "CONFIDENCE SCORING (IMPORTANT):\n" +
-                            "- 1.0 → exact match or very obvious (same word / minor variation)\n" +
-                            "- 0.8 → very similar meaning (clear synonym or translation)\n" +
-                            "- 0.6 → somewhat similar (related but not exact)\n" +
-                            "- 0.3 → weak similarity\n" +
-                            "- 0.0 → no reasonable similarity\n" +
+                            "NORMALIZATION:\n" +
+                            "- lowercase\n" +
+                            "- remove spaces & underscores\n" +
+                            "- strip common affixes: id, _id\n" +
                             "\n" +
-                            "OUTPUT RULES:\n" +
-                            "- If best match exists → put in discovery with confidence score\n" +
-                            "- If confidence <= 0.3 → put in not_found instead\n" +
-                            "- NEVER force match if not reasonable\n" +
+                            "ALLOWED MATCH:\n" +
+                            "1. Exact normalized match → 1.0\n" +
+                            "2. Minor variation (username = user_name) → 0.8\n" +
+                            "3. Strict common synonym ONLY:\n" +
+                            "   - name = nama\n" +
+                            "   - description = keterangan\n" +
+                            "   - email = email\n" +
+                            "   - phone = telepon\n" +
+                            "   - branch = cabang / kanwil\n" +
                             "\n" +
-                            "OUTPUT FORMAT:\n" +
+                            "PROHIBITED:\n" +
+                            "- semantic/context-based matching\n" +
+                            "- unrelated mappings\n" +
+                            "- forcing matches\n" +
+                            "- generic matches (id, name) unless exact\n" +
+                            "\n" +
+                            "CONFIDENCE:\n" +
+                            "- 1.0 exact\n" +
+                            "- 0.8 strong variation/synonym\n" +
+                            "- 0.6 borderline acceptable\n" +
+                            "- ≤0.3 = NO MATCH\n" +
+                            "\n" +
+                            "OUTPUT:\n" +
+                            "- Include ONLY matches > 0.6\n" +
+                            "- Otherwise → `not_found`\n" +
+                            "- Many unmatched is OK\n" +
+                            "\n" +
+                            "FORMAT:\n" +
                             "{\n" +
                             "  \"discovery\": [\n" +
                             "    {\n" +
+                            "      \"client_column\": \"...\",\n" +
                             "      \"schema_column\": \"...\",\n" +
-                            "      \"matched_column\": \"...\",\n" +
                             "      \"confidence\": 0.0\n" +
                             "    }\n" +
                             "  ],\n" +
                             "  \"not_found\": [\"...\"]\n" +
                             "}\n" +
                             "\n" +
-                            "CONSTRAINTS:\n" +
-                            "- Every schema_column MUST appear exactly once\n" +
-                            "- No duplicates\n" +
-                            "- No missing fields\n" +
+                            "FINAL RULE:\n" +
+                            "If not clearly justified by NAME similarity → DO NOT MATCH.\n" +
                             "\n" +
                             "DATA:\n" +
                             dataJson;

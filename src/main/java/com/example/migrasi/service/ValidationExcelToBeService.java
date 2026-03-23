@@ -82,7 +82,7 @@ public class ValidationExcelToBeService {
 
             Map<String, Object> tableCandidate = new LinkedHashMap<>();
 
-            tableCandidate.put("client_fields", entry.getKey());
+            tableCandidate.put("client_columns", entry.getKey());
 
             List<Map<String, Object>> sampleRows = entry.getValue()
                     .stream()
