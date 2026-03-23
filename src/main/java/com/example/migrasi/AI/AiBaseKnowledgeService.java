@@ -339,20 +339,21 @@ public class AiBaseKnowledgeService {
 
             List<Map<String, Object>> messages = new ArrayList<>();
 
-            systemPrompt ="" +
-                    "Kamu adalah AI yang bertugas melakukan validasi antara key fields frontend (FE) dan key schema_database. " +
-                    "Tugasmu adalah menemukan fields yang tidak konsisten, " +
-                    "seperti fields yang tidak ada di schema_db seperti perbedaan nama, " +
-                    "atau tipe data yang tidak sesuai,dan lain lain!";
+            systemPrompt = """
+                    Kamu adalah AI yang bertugas melakukan validasi
+                    antara items key frontend (FE) dan items key schema_database (DB).
+                    Tugasmu adalah menemukan item yang empty string atau null dari items key FE
+                    dan itu kamu harus tau mapping ke field mana yang cocok di item key schema_db.
+                    """;
 
 
-            userPrompt =
-                    "\"Bandingkan fields dari key klien 'client' dengan key db 'schema_db', " +
-                            "lalu tampilkan field yang tidak " +
-                            "konsisten antar " +
-                            "data pada key " +
-                            "(tidak ada di schema_db, typo, atau mismatch penamaan di schema_db, dan lain lain)." +
-                            "\"\n\n"+dataJson;
+            userPrompt = """
+                            Bandingkan fields dari items key frontend 'fe' dengan items key db 'schema_db'
+                            lalu tampilkan item yang empty string atau null dari items key fe,
+                            dan itu mestinya di mapping ke field mana di schema_db nya?,
+                            berikut ini adalah datanya.
+                            %s
+                         """.formatted(dataJson);
 
             messages.add(Map.of(
                     "role", "system",
@@ -368,6 +369,20 @@ public class AiBaseKnowledgeService {
             request.put("messages", messages);
 
             request.put("stream", false);
+
+            ResponseEntity<Map> response =
+                    restTemplate.postForEntity(url, request, Map.class);
+
+            Map body = response.getBody();
+
+            Map message = (Map) body.get("message");
+
+            String content = message.get("content").toString();
+
+            saveToFile(content, type);
+
+            log.info("response complete");
+
         }
 
         if(type.equals("client2be")) {
@@ -375,30 +390,34 @@ public class AiBaseKnowledgeService {
             List<String> prompts = buildPromptList(dataJson);
 
             systemPrompt =
-                    "Kamu adalah AI yang bertugas melakukan mapping antara field dari client dengan field dari database schema.\n" +
-                            "\n" +
-                            "Tugas kamu:\n" +
-                            "- Menilai tingkat kemiripan (confidence) antara dua field: field A (client) dan field B (schema).\n" +
-                            "- Berikan nilai confidence dari 0 sampai 1:\n" +
-                            "  - 1 = sangat yakin (makna sama persis)\n" +
-                            "  - 0.7 - 0.9 = sangat mirip (hampir sama)\n" +
-                            "  - 0.4 - 0.6 = cukup relevan\n" +
-                            "  - 0.1 - 0.3 = sedikit berkaitan\n" +
-                            "  - 0 = tidak ada hubungan\n" +
-                            "\n" +
-                            "Aturan penting:\n" +
-                            "- Gunakan pemahaman SEMANTIK (arti kata), bukan hanya kesamaan teks.\n" +
-                            "- Pertimbangkan konteks umum database (contoh: Email → email, Username → user_name, Password → password_hash).\n" +
-                            "- Field \"id\" biasanya adalah primary key, cocok dengan field yang berfungsi sebagai identifier.\n" +
-                            "- Abaikan perbedaan huruf besar/kecil dan simbol.\n" +
-                            "- Jika field client jelas tidak berhubungan dengan schema, beri nilai rendah (0 atau mendekati 0).\n" +
-                            "\n" +
-                            "Output WAJIB dalam format JSON TANPA penjelasan tambahan:\n" +
-                            "{\n" +
-                            "  \"client_field\": \"<nama field client>\",\n" +
-                            "  \"schema_field\": \"<nama field schema>\",\n" +
-                            "  \"confidence\": <angka 0 - 1>\n" +
-                            "}";
+                    """
+                            RESPONSE HARUS JSON!
+                            
+                            Kamu adalah AI yang bertugas melakukan mapping antara field A -> field key client_data dengan field B ->  field key dari schema_db
+
+                            Tugas kamu:
+                            - Menilai tingkat kemiripan (confidence) antara dua field: field A key client_data dan field B key schema_db.
+                            - Berikan nilai confidence dari 0 sampai 1:
+                              - 1 = sangat yakin (makna sama persis)
+                              - 0.7 - 0.9 = sangat mirip (hampir sama)
+                              - 0.4 - 0.6 = cukup relevan
+                              - 0.1 - 0.3 = sedikit berkaitan
+                              - 0 = tidak ada hubungan
+
+                            Aturan penting:
+                            - Gunakan pemahaman SEMANTIK (arti kata), bukan hanya kesamaan teks.
+                            - Pertimbangkan konteks umum database (contoh: Email → email, Username → user_name, Password → password_hash).
+                            - Field "id" biasanya adalah primary key, cocok dengan field yang berfungsi sebagai identifier.
+                            - Abaikan perbedaan huruf besar/kecil dan simbol.
+                            - Jika field client jelas tidak berhubungan dengan schema, beri nilai rendah (0 atau mendekati 0).
+
+                            Output WAJIB dalam format JSON TANPA penjelasan tambahan:
+                            {
+                              "client_field": "<nama field client>",
+                              "schema_field": "<nama field schema>",
+                              "confidence": <angka 0 - 1>
+                              "reason": <alasan confidence nya>
+                            }""";
 
             for (int i = 0; i < prompts.size(); i++) {
 
@@ -417,13 +436,14 @@ public class AiBaseKnowledgeService {
                 ));
 
                 request.put("model", aiModel);
+
                 request.put("messages", messages);
+
                 request.put("stream", false);
 
                 log.info("Request prompt: {}", prompts.get(i));
 
-                ResponseEntity<Map> response =
-                        restTemplate.postForEntity(url, request, Map.class);
+                ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
 
                 Map body = response.getBody();
 
@@ -453,14 +473,6 @@ public class AiBaseKnowledgeService {
             Files.createDirectories(directory);
         }
 
-        // inject color dulu
-        try {
-            content = addColorBasedOnConfidence(content);
-
-        }catch (Exception e) {
-            e.printStackTrace();
-
-        }
         // 🔥 1 file per type (tanpa timestamp)
         String fileName = type.toLowerCase() + ".md";
         Path filePath = directory.resolve(fileName);
@@ -488,48 +500,8 @@ public class AiBaseKnowledgeService {
         System.out.println("File appended: " + filePath.toAbsolutePath());
     }
 
-    private String addColorBasedOnConfidence(String json) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-
-            JsonNode root = mapper.readTree(json);
-
-            // ===== HANDLE FOUND =====
-            if (root.has("found") && root.get("found").isArray()) {
-                ArrayNode foundArray = (ArrayNode) root.get("found");
-
-                for (JsonNode item : foundArray) {
-                    if (item instanceof ObjectNode) {
-                        String confidence = item.has("confidence")
-                                ? item.get("confidence").asText()
-                                : "high";
-
-                        String colored = "**🟢 " + confidence + "**";
-                        ((ObjectNode) item).put("flag", colored);
-                    }
-                }
-            }
-
-            // ===== HANDLE NOT_FOUND =====
-            if (root.has("not_found") && root.get("not_found").isArray()) {
-                ArrayNode notFoundArray = (ArrayNode) root.get("not_found");
-
-                for (JsonNode item : notFoundArray) {
-                    if (item instanceof ObjectNode) {
-                        ((ObjectNode) item).put("flag", "**🔴 not_found**");
-                    }
-                }
-            }
-
-            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return json;
-        }
-    }
-
     public List<String> buildPromptList(String jsonData) {
+
         List<String> prompts = new ArrayList<>();
 
         try {
