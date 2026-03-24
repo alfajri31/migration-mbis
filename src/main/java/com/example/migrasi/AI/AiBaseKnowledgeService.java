@@ -329,7 +329,7 @@ public class AiBaseKnowledgeService {
 
         ObjectMapper mapper  = new ObjectMapper();
 
-        String systemPrompt="";
+        String systemPrompt;
 
         if(type.equals("fe2be")) {
 
@@ -353,19 +353,20 @@ public class AiBaseKnowledgeService {
                         - Value field
                         
                         FORMAT OUTPUT:
-                        {
-                          "fe_field_empty": "...",
-                          "existing_table_name": "...",
-                          "existing_table_field_name": "...",
-                          "field_existing": "high exist | medium exist | low exist",
-                          "reason": "..."
-                        }
+                        [
+                            {
+                              "fe_field_empty": "...",
+                              "existing_table_name": "...",
+                              "existing_table_field_name": "...",
+                              "field_existing": "high exist | medium exist | low exist",
+                              "reason": "..."
+                            }
+                        ]
                         
                         RULE:
                         - Jika tidak relevan → skip (jangan dipaksa)
                         - Hanya JSON
                         """;
-
 
             List<String> userPrompts = buildPromptFe2Be(dataJson);
 
@@ -380,8 +381,11 @@ public class AiBaseKnowledgeService {
                 messages.add(Map.of("role", "user", "content", prompt));
 
                 request.put("model", aiModel);
+
                 request.put("messages", messages);
+
                 request.put("temperature", 0);
+
                 request.put("stream", false);
 
                 ResponseEntity<Map> response =
@@ -405,42 +409,54 @@ public class AiBaseKnowledgeService {
 
         if(type.equals("client2be")) {
 
-            List<String> userPrompts = buildPromptClient2Be(dataJson);
-
             systemPrompt = """
-                    OUTPUT HARUS BERUPA JSON SAJA. TANPA PENJELASAN.
-                    
+                    OUTPUT HARUS BERUPA JSON VALID SAJA. TANPA TEKS TAMBAHAN LAGI.
+                                        
                     PERAN:
-                    AI untuk mencocokkan field client_data ke schema_db.
-                    
+                    AI bertugas mencari PATH JSON di schema_db berdasarkan array dari property client_columns.
+                    AI bertugas mencari semantik berdasarkan array di client_columns
+                                        
                     TUJUAN:
-                    - Pilih 1 column dari schema_db yang PALING MIRIP dengan client field
-                    - HARUS berasal dari daftar schema_db yang diberikan
-                    
+                                        
+                    * Dari client_columns → cari field yang paling cocok di schema_db.schema_columns
+                                        
+                    ALUR WAJIB:
+                                        
+                    1. BACA client_columns
+                    2. TELUSURI SELURUH schema_db.schema_columns
+                    3. TEMUKAN kandidat yang SAMA SECARA SEMANTIK
+                                        
                     ATURAN KERAS:
-                    - schema_db_table_name HARUS dari daftar schema_db
-                    - schema_db_column_name HARUS dari kolom table tersebut
-                    - DILARANG membuat nama table/column sendiri
-                    - DILARANG menggunakan kata dari client_data sebagai schema_db
-                    
-                    JIKA TIDAK ADA YANG MIRIP:
-                    OUTPUT {}
-                    
-                    INPUT:
-                    - client_field: <field>
-                    - schema_db:
-                      table: m_branches → columns: [id, code, name]
-                      table: m_cob → columns: [cob_name, description]
-                    
+                                        
+                    * HANYA boleh memilih dari schema_db
+                    * DILARANG membuat nama field/table baru
+                    * JIKA tidak yakin → WAJIB SKIP
+                                        
+                    KRITERIA MATCH:
+                                        
+                    * Exact match (nama sama) → HIGH
+                    * Sinonim jelas → MEDIUM
+                    * kata sangan berbeda tetap makna hampir sama → LOW
+                                        
+                    JIKA TIDAK ADA YANG COCOK BAIK DARI SEGI MAKNA:
+                    SKIP
+                                       
+                                        
                     FORMAT OUTPUT:
-                    {
-                      "client_column_name": "...",
-                      "schema_db_table_name": "...",
-                      "schema_db_column_name": "...",
-                      "similarity_confidence": "high | medium | low",
-                      "reason": "..."
-                    }
+                    [
+                        {
+                            "client_column_name": "...",
+                            "match_found": true | false,
+                            "schema_db_table_name": "schema_db.table",
+                            "schema_db_column_name": "...",
+                            "json_path_in_schema_db": "schema_db.schema_columns",
+                            "similarity_confidence": "high | medium | low",
+                            "reason_confidence": ""
+                        }
+                    ]           \s
                     """;
+
+            List<String> userPrompts = buildPromptClient2Be(dataJson);
 
             for (String prompt : userPrompts) {
 
@@ -453,8 +469,11 @@ public class AiBaseKnowledgeService {
                 messages.add(Map.of("role", "user", "content", prompt));
 
                 request.put("model", aiModel);
+
                 request.put("messages", messages);
+
                 request.put("temperature", 0);
+
                 request.put("stream", false);
 
                 ResponseEntity<Map> response =
@@ -476,106 +495,6 @@ public class AiBaseKnowledgeService {
         }
     }
 
-    public List<String> buildPromptClient2Be(String jsonData) {
-
-        List<String> prompts = new ArrayList<>();
-
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(jsonData);
-
-            JsonNode clientData = root.path("client_data");
-            JsonNode schemaDb = root.path("schema_db");
-
-            // Loop semua client_data
-            for (JsonNode client : clientData) {
-                JsonNode clientColumns = client.path("client_columns");
-
-                // Loop semua schema_db
-                for (JsonNode schema : schemaDb) {
-                    JsonNode schemaColumns = schema.path("schema_columns");
-
-                    // Loop schema columns
-                    for (JsonNode schemaCol : schemaColumns) {
-                        String schemaColumn = schemaCol.asText();
-
-                        // Loop client columns
-                        for (JsonNode clientCol : clientColumns) {
-                            String clientColumn = clientCol.asText();
-
-                            // Build prompt per item
-                            String prompt = "Apakah item field ini '" + clientColumn +"' di client_data ini sudah terisi di key schema_db existing?";
-
-                            prompts.add(prompt);
-                        }
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            throw new RuntimeException("Error parsing JSON", e);
-        }
-
-        return prompts;
-    }
-
-    public List<String> buildPromptFe2Be(String jsonData) {
-
-        List<String> prompts = new ArrayList<>();
-
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(jsonData);
-
-            JsonNode frontend = root.path("frontend");
-            JsonNode schemaDb = root.path("schema_db");
-
-            for (JsonNode fe : frontend) {
-                String field = fe.path("field").asText();
-                String value = fe.path("value").asText();
-
-                // hanya ambil yang kosong
-                if (value == null || value.isEmpty()) {
-
-                    for (JsonNode schema : schemaDb) {
-                        String tableName = schema.path("table").asText();
-
-                        JsonNode columns = schema.path("schema_columns");
-
-                        for (JsonNode col : columns) {
-
-                            String schemaColumn = col.asText();
-
-                            String prompt = String.format("""
-                            Field frontend berikut kosong:
-                            field: %s
-                            value: %s
-                            
-                            Apakah field ini ada di:
-                            column: %s
-                            table: %s ?
-                            
-                            """, field, value, schemaColumn, tableName);
-
-                            prompts.add(prompt);
-                        }
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        return prompts;
-    }
-
-    public int estimateTokens(String text) {
-        if (text == null || text.isEmpty()) return 0;
-
-        return text.length() / 3;
-    }
-
     private void saveToFile(JsonNode node, String type) throws Exception {
 
         String folderPath = "summary";
@@ -586,44 +505,50 @@ public class AiBaseKnowledgeService {
         }
 
         String fileName = type.toLowerCase() + ".html";
+
         Path filePath = directory.resolve(fileName);
 
         boolean fileExists = Files.exists(filePath);
 
-        StringBuilder header = new StringBuilder();
-        StringBuilder filterRow = new StringBuilder();
-        StringBuilder row = new StringBuilder();
-
-        // ambil field dinamis
-        List<String> keys = new ArrayList<>();
-        node.fieldNames().forEachRemaining(keys::add);
-
-        // HEADER
-        header.append("<tr>");
-        filterRow.append("<tr>");
-
-        for (String key : keys) {
-            header.append("<th>").append(key).append("</th>");
-            filterRow.append("<th><input type='text' onkeyup='filterTable(this, ")
-                    .append(keys.indexOf(key))
-                    .append(")' placeholder='Filter ").append(key).append("'></th>");
-        }
-
-        header.append("</tr>");
-        filterRow.append("</tr>");
-
-        // ROW DATA
-        row.append("<tr>");
-        for (String key : keys) {
-            String value = node.path(key).asText();
-            row.append("<td>").append(value).append("</td>");
-        }
-        row.append("</tr>\n");
-
         StringBuilder finalContent = new StringBuilder();
 
+        // HANDLE ARRAY
+        if (!node.isArray()) {
+            log.warn("Node bukan array, skip");
+            return;
+        }
+
+        // ambil keys dari object pertama
+        JsonNode firstObj = node.get(0);
+        if (firstObj == null || !firstObj.isObject()) {
+            log.warn("Array kosong / invalid");
+            return;
+        }
+
+        List<String> keys = new ArrayList<>();
+        firstObj.fieldNames().forEachRemaining(keys::add);
+
+        // HEADER hanya dibuat sekali
         if (!fileExists) {
-            // HTML awal + script filter
+
+            StringBuilder header = new StringBuilder();
+            StringBuilder filterRow = new StringBuilder();
+
+            header.append("<tr>");
+            filterRow.append("<tr>");
+
+            for (int i = 0; i < keys.size(); i++) {
+                String key = keys.get(i);
+
+                header.append("<th>").append(key).append("</th>");
+                filterRow.append("<th><input type='text' onkeyup='filterTable(this, ")
+                        .append(i)
+                        .append(")' placeholder='Filter ").append(key).append("'></th>");
+            }
+
+            header.append("</tr>");
+            filterRow.append("</tr>");
+
             finalContent.append("""
 <!DOCTYPE html>
 <html>
@@ -641,7 +566,7 @@ function filterTable(input, colIndex) {
     const table = document.getElementById("myTable");
     const tr = table.getElementsByTagName("tr");
 
-    for (let i = 2; i < tr.length; i++) { // skip header + filter row
+    for (let i = 2; i < tr.length; i++) {
         let td = tr[i].getElementsByTagName("td")[colIndex];
         if (td) {
             let txtValue = td.textContent || td.innerText;
@@ -663,10 +588,25 @@ function filterTable(input, colIndex) {
             finalContent.append(header).append("\n");
             finalContent.append(filterRow).append("\n");
             finalContent.append("</thead>\n<tbody>\n");
+
         }
 
-        // append row
-        finalContent.append(row);
+        // LOOP ARRAY → banyak row
+        for (JsonNode obj : node) {
+
+            if (!obj.isObject()) continue;
+
+            StringBuilder row = new StringBuilder();
+            row.append("<tr>");
+
+            for (String key : keys) {
+                String value = obj.path(key).asText("");
+                row.append("<td>").append(value).append("</td>");
+            }
+
+            row.append("</tr>\n");
+            finalContent.append(row);
+        }
 
         Files.writeString(
                 filePath,
@@ -677,6 +617,26 @@ function filterTable(input, colIndex) {
 
         System.out.println("HTML updated: " + filePath.toAbsolutePath());
     }
+
+    public List<String> buildPromptClient2Be(String jsonData) {
+        List<String> prompts = new ArrayList<>();
+        prompts.add(jsonData);
+        return prompts;
+    }
+
+    public List<String> buildPromptFe2Be(String jsonData) {
+        List<String> prompts = new ArrayList<>();
+        prompts.add(jsonData);
+        return prompts;
+    }
+
+    public int estimateTokens(String text) {
+        if (text == null || text.isEmpty()) return 0;
+
+        return text.length() / 3;
+    }
+
+
 
 
 
