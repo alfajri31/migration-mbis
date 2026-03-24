@@ -32,7 +32,7 @@ public class AiBaseKnowledgeService {
     @Autowired
     private PromptLoader promptLoader;
 
-    private final static int reservedTokens= 5000;
+    private final static int reservedTokens= 500;
     private final RestTemplate restTemplate = new RestTemplate();
 
     // =========================
@@ -408,42 +408,39 @@ public class AiBaseKnowledgeService {
             List<String> userPrompts = buildPromptClient2Be(dataJson);
 
             systemPrompt = """
-                        OUTPUT HARUS BERUPA JSON SAJA. TANPA PENJELASAN ATAU TEKS TAMBAHAN.
-                        
-                        SUMBER DATA:
-                        - client_data sebagai acuan utama
-                        
-                        PERAN:
-                        AI untuk mencocokkan nama field antara:
-                        1. client_data
-                        2. schema_db
-                        
-                        TUJUAN:
-                        - Cari field di client_data yang paling mirip dengan field di schema_db
-                        - HANYA berdasarkan kemiripan nama field (string similarity)
-                        - setelah mendapatkan kemiripan maka ambil nama table isikan ke schema_db_table_name 
-                        
-                        ATURAN:
-                        - Abaikan value (TIDAK PERLU DIPERTIMBANGKAN)
-                        - Fokus ke:
-                          - kesamaan kata (contoh: name vs full_name)
-                          - singkatan (contoh: id vs nip vs user_id)
-                          - pola umum database
-                        
-                        FORMAT OUTPUT:
-                        {
-                          "client_column_name": "...",
-                          "schema_db_table_name": "...",
-                          "schema_db_column_name": "...",
-                          "similarity_confidence": "high | medium | low",
-                          "reason": "..."
-                        }
-                        
-                        RULE:
-                        - Jika tidak mirip → SKIP (jangan dipaksa)
-                        - Jangan gunakan value
-                        - Hanya JSON
-                        """;
+                    OUTPUT HARUS BERUPA JSON SAJA. TANPA PENJELASAN.
+                    
+                    PERAN:
+                    AI untuk mencocokkan field client_data ke schema_db.
+                    
+                    TUJUAN:
+                    - Pilih 1 column dari schema_db yang PALING MIRIP dengan client field
+                    - HARUS berasal dari daftar schema_db yang diberikan
+                    
+                    ATURAN KERAS:
+                    - schema_db_table_name HARUS dari daftar schema_db
+                    - schema_db_column_name HARUS dari kolom table tersebut
+                    - DILARANG membuat nama table/column sendiri
+                    - DILARANG menggunakan kata dari client_data sebagai schema_db
+                    
+                    JIKA TIDAK ADA YANG MIRIP:
+                    OUTPUT {}
+                    
+                    INPUT:
+                    - client_field: <field>
+                    - schema_db:
+                      table: m_branches → columns: [id, code, name]
+                      table: m_cob → columns: [cob_name, description]
+                    
+                    FORMAT OUTPUT:
+                    {
+                      "client_column_name": "...",
+                      "schema_db_table_name": "...",
+                      "schema_db_column_name": "...",
+                      "similarity_confidence": "high | medium | low",
+                      "reason": "..."
+                    }
+                    """;
 
             for (String prompt : userPrompts) {
 
