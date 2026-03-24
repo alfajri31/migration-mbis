@@ -230,81 +230,85 @@ public class AiBaseKnowledgeService {
     // BATCH PROCESSING
     // =========================
     private void processBatch(Map<String, Object> structuredData,
-                                ObjectMapper mapper,
-                                String type,
-                                int dataBatch) throws Exception {
+                              ObjectMapper mapper,
+                              String type,
+                              int autoNumSplitBatch) throws Exception {
 
-        Map<String, List<List<?>>> batchedData = splitBatches(structuredData,dataBatch);
+        /**
+         * guide comment
+         * mestinya gini, autoNumBatch 5
+         * split batch fe dan schema_db dengan autoNumBatch nya
+         * setelah di split:
+         * misal total fe batch ada 10
+         * misal total schema batch ada 20
+         * kemudian iterasi sebanyak jumlah batch fe (10) dengan autoNumBatch
+         * F1 → schema 0–4
+         * F1 → schema 5–10
+         * F1 → schema 10-15
+         * F1 → schema 15-20
+         * F2 → schema 0–4
+         * F2 → schema 5–10
+         * F2 → schema 10-15
+         * F2 → schema 15-20
+         * .......................................
+         * F10 → schema 15-20
+         */
 
-        List<String> keys = new ArrayList<>(batchedData.keySet());
+        String keyFrontend = "frontend";
 
-        if (keys.size() < 2) {
-            throw new IllegalStateException("Minimal harus ada 2 key untuk kombinasi");
-        }
+        String keySchema = "schema_db";
 
-        String key1 = keys.get(0);
+        // frontend tetap split
+        List<List<?>> frontendBatches =
+                splitSingle(structuredData.get(keyFrontend), autoNumSplitBatch);
 
-        String key2 = keys.get(1);
+        List<?> fullSchemaList = (List<?>) structuredData.get(keySchema);
 
-        List<List<?>> key1Batches = batchedData.get(key1);
+        int schemaSize = fullSchemaList.size();
 
-        List<List<?>> key2Batches = batchedData.get(key2);
+        for (int i = 0; i < frontendBatches.size(); i++) {
 
-        int totalCombination = key1Batches.size() * key2Batches.size();
+            List<?> frontendBatch = frontendBatches.get(i);
 
-        log.info("TOTAL KOMBINASI: {}", totalCombination);
+            // 🔥 schema SELALU mulai dari 0 tiap frontend
+            for (int start = 0; start < schemaSize; start += autoNumSplitBatch) {
 
-        for (int i = 0; i < key1Batches.size(); i++) {
+                int end = Math.min(start + autoNumSplitBatch, schemaSize);
 
-            for (int j = 0; j < key2Batches.size(); j++) {
+                List<?> schemaBatch = fullSchemaList.subList(start, end);
 
                 Map<String, Object> batchData = Map.of(
-                        key1, key1Batches.get(i),
-                        key2, key2Batches.get(j)
+                        keyFrontend, frontendBatch,
+                        keySchema, schemaBatch
                 );
 
-                log.info("Combine: {} batch {} WITH {} batch {}", key1, i + 1, key2, j + 1);
+                log.info("F{} → schema {}-{}",
+                        i + 1, start, end - 1);
 
                 callSummary(
                         mapper.writeValueAsString(batchData),
                         type
                 );
-
             }
         }
     }
-
     // =========================
     // SPLIT BATCH
     // =========================
-    private Map<String, List<List<?>>> splitBatches(Map<String, Object> structuredData,int dataBatch) {
+    private List<List<?>> splitSingle(Object data, int batchSize) {
 
-        Map<String, List<List<?>>> batchedData = new LinkedHashMap<>();
+        List<?> fullList = (List<?>) data;
 
-        int totalSize = ((List<?>) structuredData.values().iterator().next()).size();
+        List<List<?>> batches = new ArrayList<>();
 
-        int batchSize = (int) Math.ceil((double) totalSize / dataBatch);
+        for (int start = 0; start < fullList.size(); start += batchSize) {
 
-        for (Map.Entry<String, Object> entry : structuredData.entrySet()) {
+            int end = Math.min(start + batchSize, fullList.size());
 
-            List<?> fullList = (List<?>) entry.getValue();
-            List<List<?>> batches = new ArrayList<>();
-
-            for (int i = 0; i < dataBatch; i++) {
-
-                int start = i * batchSize;
-
-                int end = Math.min(start + batchSize, fullList.size());
-
-                if (start >= fullList.size()) break;
-
-                batches.add(fullList.subList(start, end));
-            }
-
-            batchedData.put(entry.getKey(), batches);
+            batches.add(fullList.subList(start, end));
         }
 
-        return batchedData;
+        return batches;
     }
 
     // =========================
@@ -334,15 +338,18 @@ public class AiBaseKnowledgeService {
                         
                         SUMBER DATA:
                         client_data sebagai pusat key entry nya
-                        
-                        LARANGAN:
-                        LARANGAN RESPONS USER KETIKA DATA DARI ROLE USER DI KOLOM CHAT TIDAK ADA!!
+                        schema_db sebagai taget data nya
                             
-                        PERAN:
-                        AI untuk mapping field kosong dari frontend ke schema database.
+                        CARANYA:
+                        1. AI mapping field kosong atau null key frontend ke key schema_database.
+                        2. AI mencari field yang sama atau paling mirip di schema_db.schema_columns
+                        3. AI cek apakah value column di schema_db.sample_data nya sama kosong atau null juga
+                       
                         
                         TUJUAN:
-                        Cari field schema_db yang paling cocok untuk mengisi field frontend yang kosong
+                        return field_existing_empty -> true jika
+                        dari schema_db field value dan field value frontend kosong atau null juga
+                        jika tidak null atau tidak empty maka return field_existing_empty -> false
                         
                         KRITERIA:
                         - Nama field
@@ -354,13 +361,12 @@ public class AiBaseKnowledgeService {
                               "fe_field_empty": "...",
                               "existing_table_name": "...",
                               "existing_table_field_name": "...",
-                              "field_existing": "high exist | medium exist | low exist",
+                              "field_existing_empty": "true | false",
                               "reason": "..."
                             }
                         ]
                         
                         RULE:
-                        - Jika tidak relevan → skip (jangan dipaksa)
                         - Hanya JSON
                         """;
 
