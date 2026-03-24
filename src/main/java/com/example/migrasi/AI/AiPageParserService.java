@@ -27,8 +27,6 @@ public class AiPageParserService {
     @Value("${agent.host.url}")
     private String url;
 
-    @Autowired
-    private PromptLoader promptLoader;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -36,17 +34,17 @@ public class AiPageParserService {
 
         List<Map<String, Object>> messages = new ArrayList<>();
 
-        Map<String, Object> prompt = promptLoader.loadPrompt("image-prompt.json");
+        String systemFeedback = """
+                You extract structured data from images. Only fill fields that are empty.
+                Do not guess or infer missing values. Ignore unclear text.
+                Output must be a valid JSON array only, with no explanation or extra text
+                """;
 
-        // ambil system.feedback.picture
-        Map<String, Object> system = (Map<String, Object>) prompt.get("system");
-        Map<String, Object> feedback = (Map<String, Object>) system.get("feedback");
-        String systemFeedback = (String) feedback.get("picture");
-
-        // ambil prompt.user.picture
-        Map<String, Object> promptMap = (Map<String, Object>) prompt.get("prompt");
-        Map<String, Object> user = (Map<String, Object>) promptMap.get("user");
-        String promptUser = (String) user.get("picture");
+        String promptUser = """
+                Given an image and backend field data, extract ONLY values for fields that are empty (null, "", or missing). 
+                Only include values explicitly visible in the image. Ignore already filled fields. 
+                Return ONLY a valid JSON array where each item contains "field" and "value
+                """;
 
         // system message
         messages.add(Map.of(
@@ -54,7 +52,7 @@ public class AiPageParserService {
                 "content", systemFeedback
         ));
 
-            // user message (WITH IMAGE)
+        // user message (WITH IMAGE)
         Map<String, Object> userMessage = new HashMap<>();
         userMessage.put("role", "user");
         userMessage.put("content", promptUser);
@@ -65,6 +63,7 @@ public class AiPageParserService {
         Map<String, Object> request = new HashMap<>();
 
         Map<String, Object> options = new HashMap<>();
+
         options.put("temperature", 0);
 
         request.put("options", options);
