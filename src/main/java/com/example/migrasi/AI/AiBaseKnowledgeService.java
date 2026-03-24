@@ -1,6 +1,5 @@
 package com.example.migrasi.AI;
 
-import com.example.migrasi.prompt.PromptLoader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -28,9 +27,6 @@ public class AiBaseKnowledgeService {
 
     @Value("${ai.model.context.base.knowledge}")
     private int contextWindow;
-
-    @Autowired
-    private PromptLoader promptLoader;
 
     private final static int reservedTokens= 500;
     private final RestTemplate restTemplate = new RestTemplate();
