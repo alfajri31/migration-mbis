@@ -334,7 +334,7 @@ public class AiBaseKnowledgeService {
         if(type.equals("fe2be")) {
 
             systemPrompt = """
-                        OUTPUT HARUS JSON SAJA TANPA PENJELASAN.
+                        OUTPUT HARUS JSON SAJA TANPA TAMBAHAN PENJELASAN TEKS TAMBAHAN LAGI.
                         
                         SUMBER DATA:
                         client_data sebagai pusat key entry nya
@@ -410,7 +410,7 @@ public class AiBaseKnowledgeService {
         if(type.equals("client2be")) {
 
             systemPrompt = """
-                    OUTPUT HARUS BERUPA JSON VALID SAJA. TANPA TEKS TAMBAHAN LAGI.
+                    OUTPUT HARUS BERUPA JSON VALID SAJA. TANPA PENJELASAN TEKS TAMBAHAN LAGI.
                                         
                     PERAN:
                     AI bertugas mencari PATH JSON di schema_db berdasarkan array dari property client_columns.
