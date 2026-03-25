@@ -3,7 +3,6 @@ package com.example.migrasi.AI;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -236,12 +235,12 @@ public class AiBaseKnowledgeService {
 
         /**
          * guide comment
-         * mestinya gini, autoNumBatch 5
+         * autoNumBatch = 5
          * split batch fe dan schema_db dengan autoNumBatch nya
          * setelah di split:
-         * misal total fe batch ada 10
-         * misal total schema batch ada 20
-         * kemudian iterasi sebanyak jumlah batch fe (10) dengan autoNumBatch
+         * misal total fe (master key) batch ada 10 batch
+         * misal total schema batch (ref key) ada 20 batch
+         * Iterasi sebanyak jumlah batch fe (10 batch) disilangkan ke sejumlah schema_db batch per autonumbatch
          * F1 → schema 0–4
          * F1 → schema 5–10
          * F1 → schema 10-15
@@ -254,32 +253,34 @@ public class AiBaseKnowledgeService {
          * F10 → schema 15-20
          */
 
-        String keyFrontend = "frontend";
+        List<String> keys = new ArrayList<>(structuredData.keySet());
 
-        String keySchema = "schema_db";
+        String masterKey = keys.get(0);
+
+        String referenceKey = keys.get(1);
 
         // frontend tetap split
-        List<List<?>> frontendBatches =
-                splitSingle(structuredData.get(keyFrontend), autoNumSplitBatch);
+        List<List<?>> masterBatches =
+                splitSingle(structuredData.get(masterKey), autoNumSplitBatch);
 
-        List<?> fullSchemaList = (List<?>) structuredData.get(keySchema);
+        List<?> fullRefList = (List<?>) structuredData.get(referenceKey);
 
-        int schemaSize = fullSchemaList.size();
+        int refSize = fullRefList.size();
 
-        for (int i = 0; i < frontendBatches.size(); i++) {
+        for (int i = 0; i < masterBatches.size(); i++) {
 
-            List<?> frontendBatch = frontendBatches.get(i);
+            List<?> masterBatch = masterBatches.get(i);
 
-            // 🔥 schema SELALU mulai dari 0 tiap frontend
-            for (int start = 0; start < schemaSize; start += autoNumSplitBatch) {
+            // 🔥 ref SELALU mulai dari 0 tiap master
+            for (int start = 0; start < refSize; start += autoNumSplitBatch) {
 
-                int end = Math.min(start + autoNumSplitBatch, schemaSize);
+                int end = Math.min(start + autoNumSplitBatch, refSize);
 
-                List<?> schemaBatch = fullSchemaList.subList(start, end);
+                List<?> referenceBatch = fullRefList.subList(start, end);
 
                 Map<String, Object> batchData = Map.of(
-                        keyFrontend, frontendBatch,
-                        keySchema, schemaBatch
+                        masterKey, masterBatch,
+                        referenceKey, referenceBatch
                 );
 
                 log.info("F{} → schema {}-{}",
@@ -334,34 +335,27 @@ public class AiBaseKnowledgeService {
         if(type.equals("fe2be")) {
 
             systemPrompt = """
-                        OUTPUT HARUS JSON SAJA TANPA TAMBAHAN PENJELASAN TEKS TAMBAHAN LAGI.
+                        OUTPUT HARUS JSON SAJA! TANPA TAMBAHAN PENJELASAN TEKS TAMBAHAN LAGI.
                         
                         SUMBER DATA:
-                        client_data sebagai pusat key entry nya
-                        schema_db sebagai taget data nya
+                        frontend sebagai master key set
+                        schema_db sebagai reference key set nya
                             
-                        CARANYA:
-                        1. AI mapping field kosong atau null key frontend ke key schema_database.
-                        2. AI mencari field yang sama atau paling mirip di schema_db.schema_columns
-                        3. AI cek apakah value column di schema_db.sample_data nya sama kosong atau null juga
+                        PERAN:
+                        1. AI mencari kemiripan column dari master key ke reference key yang sama atau paling mirip.
+                        2. AI mencari field value yang kosong atau null saja dari master key dan reference key.
+                        3. AI mencari nama column yang sama atau paling mirip di reference key yaitu schema_db.schema_columns nya.
+                        4. AI cek apakah value column di schema_db.sample_data nya itu kosong atau null berdasarkan nama kolom di schema_db.schema_columns
+                        5. AI cek jika kosong atau null maka field_is_empty true jika tidak kosong atau tidak null maka field_is_empty false
                        
-                        
-                        TUJUAN:
-                        return field_existing_empty -> true jika
-                        dari schema_db field value dan field value frontend kosong atau null juga
-                        jika tidak null atau tidak empty maka return field_existing_empty -> false
-                        
-                        KRITERIA:
-                        - Nama field
-                        - Value field
                         
                         FORMAT OUTPUT:
                         [
                             {
-                              "fe_field_empty": "...",
-                              "existing_table_name": "...",
-                              "existing_table_field_name": "...",
-                              "field_existing_empty": "true | false",
+                              "master_field_empty": "...",
+                              "existing_ref_table_name": "...",
+                              "existing_ref_table_field_name": "...",
+                              "existing_ref_field_empty": "true | false",
                               "reason": "..."
                             }
                         ]
@@ -390,6 +384,8 @@ public class AiBaseKnowledgeService {
 
                 request.put("stream", false);
 
+                log.info("request master key {} ",prompt);
+
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
 
@@ -412,16 +408,19 @@ public class AiBaseKnowledgeService {
         if(type.equals("client2be")) {
 
             systemPrompt = """
-                    OUTPUT HARUS BERUPA JSON VALID SAJA. TANPA PENJELASAN TEKS TAMBAHAN LAGI.
-                                        
+                    OUTPUT HARUS BERUPA JSON SAJA!. TANPA PENJELASAN TEKS TAMBAHAN LAGI.
+                        
+                    SUMBER DATA:
+                    client_data sebagai pusat atau master key set nya
+                    schema_db sebagai reference key set nya
+                    
                     PERAN:
-                    AI bertugas mencari PATH JSON di schema_db berdasarkan array dari property client_columns.
-                    AI bertugas mencari semantik berdasarkan array di client_columns
-                                        
-                    TUJUAN:
-                                        
-                    * Dari client_columns → cari field yang paling cocok di schema_db.schema_columns
-                                        
+                    1. AI mencari kemiripan column dari master key ke reference key yang sama atau paling mirip.
+                    2. AI mencari nama column yang sama atau paling mirip di reference key yaitu ke schema_db.schema_columns nya.
+                    3. AI mengecek apakah value column di schema_db.sample_data nya itu kosong atau null berdasarkan nama kolom di schema_db.schema_columns
+                    4. AI mengecek jika kosong atau null maka field_is_empty true jika tidak kosong atau tidak null maka field_is_empty false
+                    5. AI memberikan hasil tingkat kemiripan similarity confidence berdasarkan kemiripan column              
+                                                               
                     ALUR WAJIB:
                                         
                     1. BACA client_columns
@@ -447,15 +446,15 @@ public class AiBaseKnowledgeService {
                     FORMAT OUTPUT:
                     [
                         {
-                            "client_column_name": "...",
+                            "master_column_name": "...",
                             "match_found": true | false,
-                            "schema_db_table_name": "schema_db.table",
-                            "schema_db_column_name": "...",
-                            "json_path_in_schema_db": "schema_db.schema_columns",
+                            "ref_table_name": "schema_db.table",
+                            "ref_column_name": "...",
+                            "json_path_in_ref": "schema_db.schema_columns",
                             "similarity_confidence": "high | medium | low",
                             "reason_confidence": ""
                         }
-                    ]           \s
+                    ]\s
                     """;
 
             List<String> userPrompts = buildPromptClient2Be(dataJson);
@@ -477,6 +476,8 @@ public class AiBaseKnowledgeService {
                 request.put("temperature", 0);
 
                 request.put("stream", false);
+
+                log.info("request master key {} ",prompt);
 
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
