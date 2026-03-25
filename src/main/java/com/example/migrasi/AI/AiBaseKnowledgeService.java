@@ -374,33 +374,7 @@ public class AiBaseKnowledgeService {
 
             for (String prompt : userPrompts) {
 
-                LinkedHashMap<String, Object> request = new LinkedHashMap<>();
-
-//                List<Map<String, Object>> messages = new ArrayList<>();
-//
-//                messages.add(Map.of("role", "system", "content", systemPrompt));
-//
-//                messages.add(Map.of("role", "user", "content", prompt));
-
-                String finalPrompt =
-                        "System:\n" + systemPrompt + "\n\n" +
-                                "User:\n" + prompt;
-
-                request.put("model", aiModel);
-
-//                request.put("messages", messages);
-
-                request.put("prompt",finalPrompt);
-
-                request.put("keep_alive",0);
-
-                request.put("stream", false);
-
-                Map<String, Object> options = new HashMap<>();
-
-                options.put("temperature", 0);
-
-                request.put("options", options);
+                LinkedHashMap<String, Object> request = getObjectLinkedHashMap(prompt, systemPrompt);
 
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
@@ -478,31 +452,7 @@ public class AiBaseKnowledgeService {
 
             for (String prompt : userPrompts) {
 
-                LinkedHashMap<String, Object> request = new LinkedHashMap<>();
-
-                List<Map<String, Object>> messages = new ArrayList<>();
-
-//                messages.add(Map.of("role", "system", "content", systemPrompt));
-//
-//                messages.add(Map.of("role", "user", "content", prompt));
-
-                String finalPrompt =
-                        "System:\n" + systemPrompt + "\n\n" +
-                                "User:\n" + prompt;
-
-                request.put("model", aiModel);
-
-//                request.put("messages", messages);
-
-                request.put("prompt",finalPrompt);
-
-                Map<String, Object> options = new HashMap<>();
-
-                options.put("temperature", 0);
-
-                request.put("options", options);
-
-                request.put("stream", false);
+                LinkedHashMap<String, Object> request = getStringObjectLinkedHashMap(prompt, systemPrompt);
 
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
@@ -525,6 +475,66 @@ public class AiBaseKnowledgeService {
                 }
             }
         }
+    }
+
+    private LinkedHashMap<String, Object> getObjectLinkedHashMap(String prompt, String systemPrompt) {
+        LinkedHashMap<String, Object> request = new LinkedHashMap<>();
+
+//                List<Map<String, Object>> messages = new ArrayList<>();
+//
+//                messages.add(Map.of("role", "system", "content", systemPrompt));
+//
+//                messages.add(Map.of("role", "user", "content", prompt));
+
+        String finalPrompt =
+                "System:\n" + systemPrompt + "\n\n" +
+                        "User:\n" + prompt;
+
+        request.put("model", aiModel);
+
+//                request.put("messages", messages);
+
+        request.put("prompt",finalPrompt);
+
+        request.put("keep_alive",0);
+
+        request.put("stream", false);
+
+        Map<String, Object> options = new HashMap<>();
+
+        options.put("temperature", 0);
+
+        request.put("options", options);
+        return request;
+    }
+
+    private LinkedHashMap<String, Object> getStringObjectLinkedHashMap(String prompt, String systemPrompt) {
+        LinkedHashMap<String, Object> request = new LinkedHashMap<>();
+
+        List<Map<String, Object>> messages = new ArrayList<>();
+
+//                messages.add(Map.of("role", "system", "content", systemPrompt));
+//
+//                messages.add(Map.of("role", "user", "content", prompt));
+
+        String finalPrompt =
+                "System:\n" + systemPrompt + "\n\n" +
+                        "User:\n" + prompt;
+
+        request.put("model", aiModel);
+
+//                request.put("messages", messages);
+
+        request.put("prompt",finalPrompt);
+
+        Map<String, Object> options = new HashMap<>();
+
+        options.put("temperature", 0);
+
+        request.put("options", options);
+
+        request.put("stream", false);
+        return request;
     }
 
     private void saveToFile(JsonNode node, String type) throws Exception {
