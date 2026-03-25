@@ -18,7 +18,7 @@ import java.util.*;
 @Slf4j
 public class AiBaseKnowledgeService {
 
-    @Value("${agent.host.url}")
+    @Value("${agent.host.url.text}")
     private String url;
 
     @Value("${ai.model.base.knowledge}")
@@ -46,7 +46,7 @@ public class AiBaseKnowledgeService {
 
         List<String> partialSummaries = mapPhase(data, mapper, safeContextWindow);
 
-        Map<String, Object> structuredData = buildStructuredData(data, partialSummaries, mapper);
+        LinkedHashMap<String, Object> structuredData = buildStructuredData(data, partialSummaries, mapper);
 
         int autoBatch = calculateBatchCountSmart(structuredData);
 
@@ -148,7 +148,7 @@ public class AiBaseKnowledgeService {
         return partialSummaries;
     }
 
-    private Map<String, Object> buildStructuredData(Map<String, List<String>> originalData,
+    private LinkedHashMap<String, Object> buildStructuredData(Map<String, List<String>> originalData,
                                                     List<String> partialSummaries,
                                                     ObjectMapper mapper) {
 
@@ -162,7 +162,7 @@ public class AiBaseKnowledgeService {
                 })
                 .toList();
 
-        Map<String, List<Object>> merged = new HashMap<>();
+        LinkedHashMap<String, List<Object>> merged = new LinkedHashMap<>();
 
         for (Object obj : parsed) {
             Map<String, Object> map = (Map<String, Object>) obj;
@@ -175,7 +175,7 @@ public class AiBaseKnowledgeService {
             }
         }
 
-        Map<String, Object> structuredData = new LinkedHashMap<>();
+        LinkedHashMap<String, Object> structuredData = new LinkedHashMap<>();
 
         for (Map.Entry<String, List<String>> entry : originalData.entrySet()) {
 
@@ -193,9 +193,9 @@ public class AiBaseKnowledgeService {
         return structuredData;
     }
 
-    private List<Map<String, Object>> transformSchemaDb(List<Object> schemaList) {
+    private List<LinkedHashMap<String, Object>> transformSchemaDb(List<Object> schemaList) {
 
-        List<Map<String, Object>> result = new ArrayList<>();
+        List<LinkedHashMap<String, Object>> result = new ArrayList<>();
 
         for (Object obj : schemaList) {
 
@@ -211,10 +211,10 @@ public class AiBaseKnowledgeService {
                     .map(col -> (String) col.get("name"))
                     .toList();
 
-            List<Map<String, Object>> rows =
-                    (List<Map<String, Object>>) tableMap.get("rows");
+            List<LinkedHashMap<String, Object>> rows =
+                    (List<LinkedHashMap<String, Object>>) tableMap.get("rows");
 
-            Map<String, Object> formatted = new LinkedHashMap<>();
+            LinkedHashMap<String, Object> formatted = new LinkedHashMap<>();
             formatted.put("table", tableName);
             formatted.put("schema_columns", fields);
             formatted.put("sample_data", rows);
@@ -228,7 +228,7 @@ public class AiBaseKnowledgeService {
     // =========================
     // BATCH PROCESSING
     // =========================
-    private void processBatch(Map<String, Object> structuredData,
+    private void processBatch(LinkedHashMap<String, Object> structuredData,
                               ObjectMapper mapper,
                               String type,
                               int autoNumSplitBatch) throws Exception {
@@ -278,15 +278,15 @@ public class AiBaseKnowledgeService {
 
                 List<?> referenceBatch = fullRefList.subList(start, end);
 
-                Map<String, Object> batchData = Map.of(
-                        masterKey, masterBatch,
-                        referenceKey, referenceBatch
-                );
+                LinkedHashMap<String, Object> batchData = new LinkedHashMap<>();
+                batchData.put(masterKey, masterBatch);
+                batchData.put(referenceKey, referenceBatch);
 
-                log.info("F{} → schema {}-{}",
+                log.info("master key{} → ref key {}-{}",
                         i + 1, start, end - 1);
 
                 callSummary(
+                        batchData,
                         mapper.writeValueAsString(batchData),
                         type
                 );
@@ -315,18 +315,19 @@ public class AiBaseKnowledgeService {
     // =========================
     // SINGLE PROCESS
     // =========================
-    private void processSingle(Map<String, Object> structuredData,
+    private void processSingle(LinkedHashMap<String, Object> structuredData,
                                  ObjectMapper mapper,
                                  String type) throws Exception {
 
         callSummary(
+                structuredData,
                 mapper.writeValueAsString(structuredData),
                 type
         );
 
     }
 
-    private void callSummary(String dataJson, String type) {
+    private void callSummary(LinkedHashMap<String,Object> dataMap,String dataJson, String type) {
 
         ObjectMapper mapper  = new ObjectMapper();
 
@@ -335,18 +336,19 @@ public class AiBaseKnowledgeService {
         if(type.equals("fe2be")) {
 
             systemPrompt = """
-                        OUTPUT HARUS JSON SAJA! TANPA TAMBAHAN PENJELASAN TEKS TAMBAHAN LAGI.
+                        RESPONSE HARUS JSON SAJA! TANPA TAMBAHAN PENJELASAN TEKS TAMBAHAN LAGI.
                         
                         SUMBER DATA:
-                        frontend sebagai master key set
-                        schema_db sebagai reference key set nya
+                        frontend sebagai master key
+                        schema_db sebagai reference key
                             
-                        PERAN:
+                        PERAN WAJIB:
                         1. AI mencari kemiripan column dari master key ke reference key yang sama atau paling mirip.
                         2. AI mencari field value yang kosong atau null saja dari master key dan reference key.
-                        3. AI mencari nama column yang sama atau paling mirip di reference key yaitu schema_db.schema_columns nya.
-                        4. AI cek apakah value column di schema_db.sample_data nya itu kosong atau null berdasarkan nama kolom di schema_db.schema_columns
-                        5. AI cek jika kosong atau null maka field_is_empty true jika tidak kosong atau tidak null maka field_is_empty false
+                        3. AI mencari nama column yang sama di reference key yaitu schema_db.schema_columns nya.
+                        4. AI cek apakah value column master key di schema_db.sample_data nya itu kosong atau null berdasarkan nama kolom di schema_db.schema_columns
+                        5. AI mapping hasil discoverynya ke dalam format output json
+                        6. AI cek jika nama column sama dan nilai kosong atau null maka field_is_empty true jika tidak kosong atau tidak null maka field_is_empty false
                        
                         
                         FORMAT OUTPUT:
@@ -364,45 +366,64 @@ public class AiBaseKnowledgeService {
                         - Hanya JSON
                         """;
 
+            List<String> keys = new ArrayList<>(dataMap.keySet());
+            String masterKey = keys.get(0);
+            log.info("request master key {}", dataMap.get(masterKey));
             List<String> userPrompts = buildPromptFe2Be(dataJson);
+
 
             for (String prompt : userPrompts) {
 
-                Map<String, Object> request = new HashMap<>();
+                LinkedHashMap<String, Object> request = new LinkedHashMap<>();
 
-                List<Map<String, Object>> messages = new ArrayList<>();
+//                List<Map<String, Object>> messages = new ArrayList<>();
+//
+//                messages.add(Map.of("role", "system", "content", systemPrompt));
+//
+//                messages.add(Map.of("role", "user", "content", prompt));
 
-                messages.add(Map.of("role", "system", "content", systemPrompt));
-
-                messages.add(Map.of("role", "user", "content", prompt));
+                String finalPrompt =
+                        "System:\n" + systemPrompt + "\n\n" +
+                                "User:\n" + prompt;
 
                 request.put("model", aiModel);
 
-                request.put("messages", messages);
+//                request.put("messages", messages);
 
-                request.put("temperature", 0);
+                request.put("prompt",finalPrompt);
+
+                request.put("keep_alive",0);
 
                 request.put("stream", false);
 
-                log.info("request master key {} ",prompt);
+                Map<String, Object> options = new HashMap<>();
+
+                options.put("temperature", 0);
+
+                request.put("options", options);
 
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
 
-                Map body = response.getBody();
-
-                Map message = (Map) body.get("message");
-
-                String content = message.get("content").toString();
+//                Map body = response.getBody();
+//
+//                Map message = (Map) body.get("message");
+//
+//                String content = extractJson(message.get("content").toString());
 
                 try {
+//                    JsonNode node = mapper.readTree(content);
+
+                    String content = extractJson(Objects.requireNonNull(response.getBody()).get("response").toString());
+
                     JsonNode node = mapper.readTree(content);
+
                     saveToFile(node, type);
+
                 } catch (Exception e) {
                     log.info("error json node {}", e.getMessage());
                 }
             }
-
         }
 
         if(type.equals("client2be")) {
@@ -411,21 +432,17 @@ public class AiBaseKnowledgeService {
                     OUTPUT HARUS BERUPA JSON SAJA!. TANPA PENJELASAN TEKS TAMBAHAN LAGI.
                         
                     SUMBER DATA:
-                    client_data sebagai pusat atau master key set nya
-                    schema_db sebagai reference key set nya
+                    client_data sebagai pusat atau master key set
+                    schema_db sebagai reference key set
                     
-                    PERAN:
+                    PERAN WAJIB:
                     1. AI mencari kemiripan column dari master key ke reference key yang sama atau paling mirip.
-                    2. AI mencari nama column yang sama atau paling mirip di reference key yaitu ke schema_db.schema_columns nya.
-                    3. AI mengecek apakah value column di schema_db.sample_data nya itu kosong atau null berdasarkan nama kolom di schema_db.schema_columns
+                    2. AI mencari nama column yang sama atau paling mirip di reference key yaitu do schema_db.schema_columns nya.
+                    3. AI mengecek apakah value column di schema_db.sample_data nya itu kosong atau null berdasarkan nama kolom master key di schema_db.schema_columns
                     4. AI mengecek jika kosong atau null maka field_is_empty true jika tidak kosong atau tidak null maka field_is_empty false
-                    5. AI memberikan hasil tingkat kemiripan similarity confidence berdasarkan kemiripan column              
+                    5. AI mapping hasil discoverynya kedalam format output json
+                    6. AI memberikan hasil tingkat kemiripan similarity confidence berdasarkan kemiripan column di master key dan reference key            
                                                                
-                    ALUR WAJIB:
-                                        
-                    1. BACA client_columns
-                    2. TELUSURI SELURUH schema_db.schema_columns
-                    3. TEMUKAN kandidat yang SAMA SECARA SEMANTIK
                                         
                     ATURAN KERAS:
                                         
@@ -461,35 +478,47 @@ public class AiBaseKnowledgeService {
 
             for (String prompt : userPrompts) {
 
-                Map<String, Object> request = new HashMap<>();
+                LinkedHashMap<String, Object> request = new LinkedHashMap<>();
 
                 List<Map<String, Object>> messages = new ArrayList<>();
 
-                messages.add(Map.of("role", "system", "content", systemPrompt));
+//                messages.add(Map.of("role", "system", "content", systemPrompt));
+//
+//                messages.add(Map.of("role", "user", "content", prompt));
 
-                messages.add(Map.of("role", "user", "content", prompt));
+                String finalPrompt =
+                        "System:\n" + systemPrompt + "\n\n" +
+                                "User:\n" + prompt;
 
                 request.put("model", aiModel);
 
-                request.put("messages", messages);
+//                request.put("messages", messages);
 
-                request.put("temperature", 0);
+                request.put("prompt",finalPrompt);
+
+                Map<String, Object> options = new HashMap<>();
+
+                options.put("temperature", 0);
+
+                request.put("options", options);
 
                 request.put("stream", false);
-
-                log.info("request master key {} ",prompt);
 
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
 
-                Map body = response.getBody();
+//                Map body = response.getBody();
 
-                Map message = (Map) body.get("message");
+//                Map message = (Map) body.get("message");
 
-                String content = message.get("content").toString();
+//                String content = extractJson(message.get("content").toString());
 
                 try {
+
+                    String content = extractJson(Objects.requireNonNull(response.getBody()).get("response").toString());
+
                     JsonNode node = mapper.readTree(content);
+
                     saveToFile(node, type);
                 } catch (Exception e) {
                     log.info("error json node {}", e.getMessage());
@@ -637,6 +666,19 @@ function filterTable(input, colIndex) {
         if (text == null || text.isEmpty()) return 0;
 
         return text.length() / 3;
+    }
+
+    public String extractJson(String raw) {
+        if (raw == null) return "";
+
+        int start = raw.indexOf("[");
+        int end = raw.lastIndexOf("]");
+
+        if (start != -1 && end != -1 && end > start) {
+            return raw.substring(start, end + 1);
+        }
+
+        return raw;
     }
 
 

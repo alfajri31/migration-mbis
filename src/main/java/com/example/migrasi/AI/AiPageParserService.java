@@ -22,9 +22,8 @@ public class AiPageParserService {
     @Value("${ai.model.picture}")
     private String aiModel;
 
-    @Value("${agent.host.url}")
+    @Value("${agent.host.url.image}")
     private String url;
-
 
     private final RestTemplate restTemplate = new RestTemplate();
 
