@@ -13,7 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class MigrasiApplication implements CommandLineRunner {
 
     private static final String[] MIGRATION_NAMES = {
-            "fe2be"
+            "customer"
     };
 
     private final SeedCustomerMigration seedCustomerMigration;

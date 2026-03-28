@@ -57,4 +57,6 @@ public class Customer extends BaseAuditEntity {
     private UUID assignedRmId;
     private Date assignmentDate;
     private String assignmentNotes;
+    private String normalizedCompanyName;
+    private boolean isMigrated;
 }

@@ -77,7 +77,7 @@ public class CustomerMigration {
                 // Ambil berdasarkan NAMA KOLOM Excel
                 String cif = getValueExcel(row, colIndex, "CIF");
                 String nama = getValueExcel(row, colIndex, "Nama");
-                String statusKerjasama = getValueExcel(row, colIndex, "Status Kerjasama");
+//                String statusKerjasama = getValueExcel(row, colIndex, "Status Kerjasama");
                 String leader = getValueExcel(row, colIndex, "Leader");
                 String member = getValueExcel(row, colIndex, "Member");
                 String hp = getValueExcel(row, colIndex, "HP");
@@ -130,11 +130,13 @@ public class CustomerMigration {
                 e.setAddress(alamat);
                 e.setFotoFile(foto);
                 e.setEntityType(bumn_non_bumn.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_"));
-                e.setCustomerType(statusKerjasama);
+                e.setCustomerType(Normalizing.normalizingMbisLegalType(jenis_perusahaan));
                 e.setNip(username);
                 e.setEmail(email);
                 e.setPicPhone(Normalizing.normalizePhone(hp));
+                e.setNormalizedCompanyName(Normalizing.normalizeCompanyName(nama));
                 e.setPhoneNormalized(Normalizing.normalizePhone(hp));
+                e.setMigrated(true);
                 if((npwp != null ? npwp.length() : 0) > 8) {
                     e.setNpwp(npwp);
                     e.setNpwpNormalized(Normalizing.normalizeNpwp(npwp));
@@ -163,13 +165,12 @@ public class CustomerMigration {
                 entities,
                 Customer.class,
                 UUID.class,
-                Customer::getCif,
-                "cif",
+                Customer::getNip,
+                "nip",
                 entityManager,
                 txManager
         );
 
         log.info("Migration selesai.");
     }
-
 }
