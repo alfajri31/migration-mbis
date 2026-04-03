@@ -15,6 +15,29 @@ import java.util.function.Function;
 @UtilityClass
 public class BulkUpsertUtil {
 
+    /**
+     * Bulk upsert (insert / update) data secara iteratif dengan transaksi per item.
+     *
+     * Konsep:
+     * - Jika data dengan unique key sudah ada → UPDATE (merge)
+     * - Jika belum ada → INSERT (persist)
+     * - Setiap data diproses dalam transaksi terpisah (REQUIRES_NEW)
+     *
+     * @param entities           List entity yang akan di-upsert
+     * @param entityClass        Class entity (contoh: Branch.class)
+     * @param idClass            Tipe ID entity (contoh: String.class / Long.class)
+     * @param uniqueKeyGetter    Function untuk mengambil nilai unique key dari entity
+     *                           (contoh: Branch::getCode)
+     * @param uniqueField        Nama field unique di entity (bukan nama kolom DB)
+     *                           (contoh: "code")
+     * @param entityManager      EntityManager untuk operasi JPA (persist / merge)
+     * @param txManager          Transaction manager untuk kontrol transaksi manual
+     *
+     * @param <T>  Tipe entity
+     * @param <ID> Tipe primary key entity
+     *
+     * @return jumlah data yang berhasil diproses (insert/update)
+     */
     public static <T, ID> int bulkUpsert(
             List<T> entities,
             Class<T> entityClass,

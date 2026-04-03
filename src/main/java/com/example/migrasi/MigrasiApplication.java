@@ -13,7 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class MigrasiApplication implements CommandLineRunner {
 
     private static final String[] MIGRATION_NAMES = {
-            "customer"
+            "user"
     };
 
     private final SeedCustomerMigration seedCustomerMigration;
@@ -28,6 +28,7 @@ public class MigrasiApplication implements CommandLineRunner {
     private final PostalCodeMigration postalCodeMigration;
     private final ValidationFeToBeService validationFeToBeService;
     private final ValidationExcelToBeService validationExcelToBeService;
+    private final UserAccountMigration userAccountMigration;
 
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
@@ -97,6 +98,12 @@ public class MigrasiApplication implements CommandLineRunner {
                 case "client2be" -> {
                     log.info("Running CLIENT2BE...");
                     validationExcelToBeService.sync();
+                }
+
+                case "user" -> {
+                    log.info("Running user...");
+                    userAccountMigration.migrate();
+
                 }
 
                 default -> {
