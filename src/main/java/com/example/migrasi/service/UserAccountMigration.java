@@ -26,7 +26,7 @@ import static com.example.migrasi.util.MyExcelDoc.getValueExcel;
 
 @Slf4j
 @Service
-public class CustomerMigration {
+public class UserAccountMigration {
 
     private static final String FILE_PATH = "data/xlsx/customer.xlsx";
     private static final String SHEET_NAME = "Mitra"; // nama tab excel
