@@ -45,4 +45,35 @@ public class JpaUtil {
                 .findFirst()
                 .orElse(null);
     }
+
+    public static <T, R> R findFieldWithTwoWhere(
+            EntityManager em,
+            Class<T> entityClass,
+            String selectField,
+            String whereField1,
+            Object value1,
+            String whereField2,
+            Object value2,
+            Class<R> resultClass
+    ) {
+        String entityName = entityClass.getSimpleName();
+
+        String jpql = String.format(
+                "select e.%s from %s e where e.%s = :value1 and e.%s = :value2",
+                selectField,
+                entityName,
+                whereField1,
+                whereField2
+        );
+
+        TypedQuery<R> query = em.createQuery(jpql, resultClass);
+
+        return query
+                .setParameter("value1", value1)
+                .setParameter("value2", value2)
+                .setMaxResults(1)
+                .getResultStream()
+                .findFirst()
+                .orElse(null);
+    }
 }

@@ -106,12 +106,24 @@ public class UserAccountMigration {
 
                 user.setEmail(email);
 
+
+
                 Optional<Division> division = divisionRepository.findByNameIgnoreCase(divisi);
 
                 if(division.isEmpty()) {
                     continue;
                 }
 
+                user.setDivisionCode(division.get().getId());
+
+                if(cabang!=null) {
+                    if(cabang.equalsIgnoreCase("jakarta kemayoran")) {
+                        cabang = "kemayoran";
+                    }
+                    if(cabang.equalsIgnoreCase("Pangkalpinang")) {
+                        cabang = "pangkal pinang";
+                    }
+                }
                 Optional<Branch> branch = branchRepository.findByNameIgnoreCase(cabang);
 
                 if(branch.isPresent()) {
@@ -141,8 +153,8 @@ public class UserAccountMigration {
                                     List.of(userMapping),
                                     UserMapping.class,
                                     UUID.class,
-                                    UserMapping::getBranchId,
-                                    "branchId",
+                                    UserMapping::getUserId,
+                                    "userId",
                                     entityManager,
                                     txManager);
 

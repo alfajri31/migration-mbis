@@ -6,20 +6,24 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
 @Slf4j
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class ValidationFeToBeService {
 
     private final DatabaseImportService databaseImportService;
     private final AiBaseKnowledgeService aiBaseKnowledgeService;
     private final AiPageParserService aiPageParserService;
-    private Map<String,List<String>> basesKnowledge;
+    private final Map<String,List<String>> basesKnowledge;
+    @Value("${output.ai.folder}")
+    private String outputAiFolder;
 
     public void sync() throws Exception {
 
@@ -55,7 +59,7 @@ public class ValidationFeToBeService {
     private List<String> addImagesKnowledges() throws JsonProcessingException {
 
         List<Map<String,String>> list = aiPageParserService
-                .toListMapFromDirectory("C:\\Users\\alfaj\\Projects\\mbis\\migration-mbis\\src\\main\\resources\\files");
+                .toListMapFromDirectory(outputAiFolder);
 
         ObjectMapper mapper = new ObjectMapper();
 

@@ -6,26 +6,30 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
 @Slf4j
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class ValidationExcelToBeService {
 
     private final DatabaseImportService databaseImportService;
     private final AiBaseKnowledgeService aiBaseKnowledgeService;
-    private Map<String,List<String>> basesKnowledge;
-    private ExcelImportService excelImportService;
+    private final Map<String,List<String>> basesKnowledge;
+    private final ExcelImportService excelImportService;
+    @Value("${output.ai.folder.excel}")
+    private String outputAiFolder;
 
     public void sync() throws Exception {
 
         String jsonStringDb = databaseImportService.exportDatabase(Set.of("log_table"));
 
-        String jsonStringExcel = excelImportService.scanDirectoryAsJson("C:\\Users\\alfaj\\Projects\\mbis\\migration-mbis\\src\\main\\resources\\excel");
+        String jsonStringExcel = excelImportService.scanDirectoryAsJson(outputAiFolder);
 
         HashMap<String,List<String>> map = new LinkedHashMap<>();
 

@@ -1,5 +1,6 @@
 package com.example.migrasi;
 
+import com.example.migrasi.model.RUserApplication;
 import com.example.migrasi.service.*;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +14,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class MigrasiApplication implements CommandLineRunner {
 
     private static final String[] MIGRATION_NAMES = {
-            "user"
+            "client2be"
     };
 
     private final SeedCustomerMigration seedCustomerMigration;
@@ -29,6 +30,7 @@ public class MigrasiApplication implements CommandLineRunner {
     private final ValidationFeToBeService validationFeToBeService;
     private final ValidationExcelToBeService validationExcelToBeService;
     private final UserAccountMigration userAccountMigration;
+    private final UserRmMigration userRmMigration;
 
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
@@ -103,6 +105,12 @@ public class MigrasiApplication implements CommandLineRunner {
                 case "user" -> {
                     log.info("Running user...");
                     userAccountMigration.migrate();
+
+                }
+
+                case "ruserapplication" -> {
+                    log.info("Running r user application...");
+                    userRmMigration.migrate();
 
                 }
 
