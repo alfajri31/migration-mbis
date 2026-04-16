@@ -450,12 +450,6 @@ public class AiBaseKnowledgeService {
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
 
-//                Map body = response.getBody();
-
-//                Map message = (Map) body.get("message");
-
-//                String content = extractJson(message.get("content").toString());
-
                 try {
 
                     String content = extractJson(Objects.requireNonNull(response.getBody()).get("response").toString());
@@ -473,19 +467,11 @@ public class AiBaseKnowledgeService {
     private LinkedHashMap<String, Object> getObjectLinkedHashMap(String prompt, String systemPrompt) {
         LinkedHashMap<String, Object> request = new LinkedHashMap<>();
 
-//                List<Map<String, Object>> messages = new ArrayList<>();
-//
-//                messages.add(Map.of("role", "system", "content", systemPrompt));
-//
-//                messages.add(Map.of("role", "user", "content", prompt));
-
         String finalPrompt =
                 "System:\n" + systemPrompt + "\n\n" +
                         "User:\n" + prompt;
 
         request.put("model", aiModel);
-
-//                request.put("messages", messages);
 
         request.put("prompt",finalPrompt);
 
