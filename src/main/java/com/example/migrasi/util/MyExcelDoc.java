@@ -6,12 +6,19 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
 
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
 @UtilityClass
 public class MyExcelDoc {
+
+    private static final ZoneId JAKARTA_ZONE = ZoneId.of("Asia/Jakarta");
 
     public static String getValueExcel(Row row, Map<String, Integer> colIndex, String columnName) {
         Integer idx = colIndex.get(columnName.trim().toUpperCase());
@@ -67,6 +74,38 @@ public class MyExcelDoc {
         if (idx < 0 || idx >= cols.length) return null;
         String v = cols[idx];
         return (v == null || v.isBlank()) ? null : v.trim();
+    }
+
+    public static OffsetDateTime toOffsetDateTime(Object value) {
+        if (value == null) return null;
+
+        // 1. Kalau sudah OffsetDateTime → convert ke Jakarta
+        if (value instanceof OffsetDateTime) {
+            return ((OffsetDateTime) value)
+                    .atZoneSameInstant(JAKARTA_ZONE)
+                    .toOffsetDateTime();
+        }
+
+        // 2. Kalau java.util.Date
+        if (value instanceof java.util.Date) {
+            return ((java.util.Date) value).toInstant()
+                    .atZone(JAKARTA_ZONE)
+                    .toOffsetDateTime();
+        }
+
+        // 3. Kalau String
+        if (value instanceof String) {
+            String str = ((String) value).trim();
+
+            DateTimeFormatter formatter =
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+            return LocalDateTime.parse(str, formatter)
+                    .atZone(JAKARTA_ZONE)
+                    .toOffsetDateTime();
+        }
+
+        throw new IllegalArgumentException("Unsupported type: " + value.getClass());
     }
 
 

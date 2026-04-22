@@ -1,6 +1,5 @@
 package com.example.migrasi;
 
-import com.example.migrasi.model.RUserApplication;
 import com.example.migrasi.service.*;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class MigrasiApplication implements CommandLineRunner {
 
     private static final String[] MIGRATION_NAMES = {
-            "client2be"
+            "template-client-customerr",
     };
 
     private final SeedCustomerMigration seedCustomerMigration;
@@ -31,6 +30,9 @@ public class MigrasiApplication implements CommandLineRunner {
     private final ValidationExcelToBeService validationExcelToBeService;
     private final UserAccountMigration userAccountMigration;
     private final UserRmMigration userRmMigration;
+    private final ClientCustTemplateMigration clientCustTemplateMigration;
+    private final ClientPipelineTemplateMigration clientPipelineTemplateMigration;
+    private final ClientTargetRmTemplateMigration clientTargetRmTemplateMigration;
 
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
@@ -114,9 +116,14 @@ public class MigrasiApplication implements CommandLineRunner {
 
                 }
 
+                case "template-client-customer" -> {
+                    log.info("template-client-customer...");
+                    userRmMigration.migrate();
+
+                }
+
                 default -> {
                     log.info("Unknown migration: {} ", migrationName);
-                    throw new RuntimeException("Unknown migration");
                 }
             }
         }
