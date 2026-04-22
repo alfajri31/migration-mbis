@@ -32,7 +32,6 @@ public class MigrasiApplication implements CommandLineRunner {
     private final UserRmMigration userRmMigration;
     private final ClientCustTemplateMigration clientCustTemplateMigration;
     private final ClientPipelineTemplateMigration clientPipelineTemplateMigration;
-    private final ClientTargetRmTemplateMigration clientTargetRmTemplateMigration;
 
     public static void main(String[] args) {
         SpringApplication.run(MigrasiApplication.class, args);
