@@ -18,7 +18,7 @@ import java.util.*;
 @Slf4j
 public class AiBaseKnowledgeService {
 
-    @Value("${agent.host.url.generate.text}")
+    @Value("${agent.host.url.chat.text}")
     private String url;
 
     @Value("${ai.model.base.knowledge}")
@@ -410,7 +410,7 @@ public class AiBaseKnowledgeService {
 
             for (String prompt : userPrompts) {
 
-                LinkedHashMap<String, Object> request = setGenerateRequest(prompt, systemPrompt);
+                LinkedHashMap<String, Object> request = setChatRequest(prompt, systemPrompt);
 
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
@@ -426,7 +426,7 @@ public class AiBaseKnowledgeService {
                     log.info("error json node {}", e.getMessage());
                     // fallback ke non-json
                     try {
-                        String raw = Objects.requireNonNull(response.getBody()).get("response").toString();
+                        String raw = getChatResponse(response);
                         saveToFileNonJson(raw, type,request);
                     } catch (Exception ex) {
                         log.error("error save non json {}", ex.getMessage());
@@ -713,5 +713,13 @@ body { font-family: monospace; white-space: pre-wrap; padding: 20px; }
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;");
+    }
+
+    private String getGenerateResponse(ResponseEntity<Map> response) {
+        return Objects.requireNonNull(response.getBody()).get("response").toString();
+    }
+
+    private String getChatResponse(ResponseEntity<Map> response) {
+        return Objects.requireNonNull(response.getBody()).get("message").toString();
     }
 }
