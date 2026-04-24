@@ -18,7 +18,7 @@ import java.util.*;
 @Slf4j
 public class AiBaseKnowledgeService {
 
-    @Value("${agent.host.url.chat.text}")
+    @Value("${agent.host.url.generate.text}")
     private String url;
 
     @Value("${ai.model.base.knowledge}")
@@ -27,7 +27,7 @@ public class AiBaseKnowledgeService {
     @Value("${ai.model.context.base.knowledge}")
     private int contextWindow;
 
-    private final static int reservedTokens= 500;
+    private static final int reservedTokens= 500;
     private final RestTemplate restTemplate = new RestTemplate();
 
     // =========================
@@ -374,7 +374,7 @@ public class AiBaseKnowledgeService {
 
             for (String prompt : userPrompts) {
 
-                LinkedHashMap<String, Object> request = getObjectLinkedHashMap(prompt, systemPrompt);
+                LinkedHashMap<String, Object> request = setGenerateRequest(prompt, systemPrompt);
 
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
@@ -392,7 +392,7 @@ public class AiBaseKnowledgeService {
                     // fallback ke non-json
                     try {
                         String raw = Objects.requireNonNull(response.getBody()).get("response").toString();
-                        saveToFileNonJson(raw, type);
+                        saveToFileNonJson(raw, type,request);
                     } catch (Exception ex) {
                         log.error("error save non json {}", ex.getMessage());
                     }
@@ -403,16 +403,14 @@ public class AiBaseKnowledgeService {
         if(type.equals("client2be")) {
 
             systemPrompt = """
-                    gunakan bahasa indonesia untuk menjawab
-                    Bandingkan data di client_data sebagai data dari excel client dengan schema_db sebagai data yang
-                    sedang dikembangkan dan carikan high risk yang akan terjadi, sebagai proses mitigasi dari data client ke schema_db
+                    change to beautify json!
                     """;
 
             List<String> userPrompts = buildPromptClient2Be(dataJson);
 
             for (String prompt : userPrompts) {
 
-                LinkedHashMap<String, Object> request = getStringObjectLinkedHashMap(prompt, systemPrompt);
+                LinkedHashMap<String, Object> request = setGenerateRequest(prompt, systemPrompt);
 
                 ResponseEntity<Map> response =
                         restTemplate.postForEntity(url, request, Map.class);
@@ -429,7 +427,7 @@ public class AiBaseKnowledgeService {
                     // fallback ke non-json
                     try {
                         String raw = Objects.requireNonNull(response.getBody()).get("response").toString();
-                        saveToFileNonJson(raw, type);
+                        saveToFileNonJson(raw, type,request);
                     } catch (Exception ex) {
                         log.error("error save non json {}", ex.getMessage());
                     }
@@ -438,7 +436,8 @@ public class AiBaseKnowledgeService {
         }
     }
 
-    private LinkedHashMap<String, Object> getObjectLinkedHashMap(String prompt, String systemPrompt) {
+
+    private LinkedHashMap<String, Object> setGenerateRequest(String prompt, String systemPrompt) {
         LinkedHashMap<String, Object> request = new LinkedHashMap<>();
 
         String finalPrompt =
@@ -449,36 +448,45 @@ public class AiBaseKnowledgeService {
 
         request.put("prompt",finalPrompt);
 
-        request.put("keep_alive",0);
-
-        request.put("stream", false);
-
         Map<String, Object> options = new HashMap<>();
 
         options.put("temperature", 0);
 
         request.put("options", options);
+
+        request.put("stream", false);
         return request;
     }
 
-    private LinkedHashMap<String, Object> getStringObjectLinkedHashMap(String prompt, String systemPrompt) {
+    private LinkedHashMap<String, Object> setChatRequest(String prompt, String systemPrompt) {
         LinkedHashMap<String, Object> request = new LinkedHashMap<>();
-
-        String finalPrompt =
-                "System:\n" + systemPrompt + "\n\n" +
-                        "User:\n" + prompt;
 
         request.put("model", aiModel);
 
-        request.put("prompt",finalPrompt);
+        // 🔥 INI YANG PALING PENTING
+        List<Map<String, String>> messages = new ArrayList<>();
 
+        Map<String, String> systemMessage = new HashMap<>();
+        systemMessage.put("role", "system");
+        systemMessage.put("content", systemPrompt);
+
+        Map<String, String> userMessage = new HashMap<>();
+        userMessage.put("role", "user");
+        userMessage.put("content", prompt);
+
+        messages.add(systemMessage);
+        messages.add(userMessage);
+
+        request.put("messages", messages);
+
+        // options tetap bisa dipakai
         Map<String, Object> options = new HashMap<>();
-
         options.put("temperature", 0);
 
         request.put("options", options);
 
         request.put("stream", false);
+
         return request;
     }
 
@@ -605,7 +613,7 @@ function filterTable(input, colIndex) {
         System.out.println("HTML updated: " + filePath.toAbsolutePath());
     }
 
-    private void saveToFileNonJson(String content, String type) throws Exception {
+    private void saveToFileNonJson(String content, String type, Object requestObj) throws Exception {
 
         String folderPath = "summary";
         Path directory = Paths.get(folderPath);
@@ -617,18 +625,45 @@ function filterTable(input, colIndex) {
         String fileName = type.toLowerCase() + ".html";
         Path filePath = directory.resolve(fileName);
 
+        // 🔥 convert request ke JSON string (pretty)
+        String requestJson;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper =
+                    new com.fasterxml.jackson.databind.ObjectMapper();
+            requestJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(requestObj);
+        } catch (Exception e) {
+            requestJson = requestObj.toString();
+        }
+
         String html = """
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Raw Output</title>
+<title>Debug Output</title>
 <style>
 body { font-family: monospace; white-space: pre-wrap; padding: 20px; }
+.section { margin-bottom: 40px; }
+.title { font-weight: bold; font-size: 18px; margin-bottom: 10px; }
+.box { background: #111; color: #0f0; padding: 10px; border-radius: 6px; }
 </style>
 </head>
 <body>
+
+<div class="section">
+<div class="title">REQUEST</div>
+<div class="box">
+""" + escapeHtml(requestJson) + """
+</div>
+</div>
+
+<div class="section">
+<div class="title">RESPONSE</div>
+<div class="box">
 """ + escapeHtml(content) + """
+</div>
+</div>
+
 </body>
 </html>
 """;
@@ -640,9 +675,8 @@ body { font-family: monospace; white-space: pre-wrap; padding: 20px; }
                 StandardOpenOption.APPEND
         );
 
-        System.out.println("RAW HTML saved: " + filePath.toAbsolutePath());
+        System.out.println("DEBUG HTML saved: " + filePath.toAbsolutePath());
     }
-
     public List<String> buildPromptClient2Be(String jsonData) {
         List<String> prompts = new ArrayList<>();
         prompts.add(jsonData);
