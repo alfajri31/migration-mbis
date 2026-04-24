@@ -18,7 +18,7 @@ import java.util.*;
 @Slf4j
 public class AiBaseKnowledgeService {
 
-    @Value("${agent.host.url.text}")
+    @Value("${agent.host.url.chat.text}")
     private String url;
 
     @Value("${ai.model.base.knowledge}")
@@ -614,7 +614,7 @@ function filterTable(input, colIndex) {
             Files.createDirectories(directory);
         }
 
-        String fileName = type.toLowerCase() + "_raw.html";
+        String fileName = type.toLowerCase() + ".html";
         Path filePath = directory.resolve(fileName);
 
         String html = """
