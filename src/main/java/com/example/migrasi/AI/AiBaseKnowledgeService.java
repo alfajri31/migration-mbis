@@ -389,6 +389,13 @@ public class AiBaseKnowledgeService {
 
                 } catch (Exception e) {
                     log.info("error json node {}", e.getMessage());
+                    // fallback ke non-json
+                    try {
+                        String raw = Objects.requireNonNull(response.getBody()).get("response").toString();
+                        saveToFileNonJson(raw, type);
+                    } catch (Exception ex) {
+                        log.error("error save non json {}", ex.getMessage());
+                    }
                 }
             }
         }
@@ -396,49 +403,9 @@ public class AiBaseKnowledgeService {
         if(type.equals("client2be")) {
 
             systemPrompt = """
-                    OUTPUT HARUS BERUPA JSON SAJA!. TANPA PENJELASAN TEKS TAMBAHAN LAGI.
-                        
-                    SUMBER DATA:
-                    client_data sebagai pusat atau master key set
-                    schema_db sebagai reference key set
-                    
-                    PERAN WAJIB:
-                    1. AI mencari kemiripan column dari master key ke reference key yang sama atau paling mirip.
-                    2. AI mencari nama column yang sama atau paling mirip di reference key yaitu do schema_db.schema_columns nya.
-                    3. AI mengecek apakah value column di schema_db.sample_data nya itu kosong atau null berdasarkan nama kolom master key di schema_db.schema_columns
-                    4. AI mengecek jika kosong atau null maka field_is_empty true jika tidak kosong atau tidak null maka field_is_empty false
-                    5. AI mapping hasil discoverynya kedalam format output json
-                    6. AI memberikan hasil tingkat kemiripan similarity confidence berdasarkan kemiripan column di master key dan reference key            
-                                                               
-                                        
-                    ATURAN KERAS:
-                                        
-                    * HANYA boleh memilih dari schema_db
-                    * DILARANG membuat nama field/table baru
-                    * JIKA tidak yakin → WAJIB SKIP
-                                        
-                    KRITERIA MATCH:
-                                        
-                    * Exact match (nama sama) → HIGH
-                    * Sinonim jelas → MEDIUM
-                    * kata sangan berbeda tetap makna hampir sama → LOW
-                                        
-                    JIKA TIDAK ADA YANG COCOK BAIK DARI SEGI MAKNA:
-                    SKIP
-                                       
-                                        
-                    FORMAT OUTPUT:
-                    [
-                        {
-                            "master_column_name": "...",
-                            "match_found": true | false,
-                            "ref_table_name": "schema_db.table",
-                            "ref_column_name": "...",
-                            "json_path_in_ref": "schema_db.schema_columns",
-                            "similarity_confidence": "high | medium | low",
-                            "reason_confidence": ""
-                        }
-                    ]\s
+                    gunakan bahasa indonesia untuk menjawab
+                    Bandingkan data di client_data sebagai data dari excel client dengan schema_db sebagai data yang
+                    sedang dikembangkan dan carikan high risk yang akan terjadi, sebagai proses mitigasi dari data client ke schema_db
                     """;
 
             List<String> userPrompts = buildPromptClient2Be(dataJson);
@@ -459,6 +426,13 @@ public class AiBaseKnowledgeService {
                     saveToFile(node, type);
                 } catch (Exception e) {
                     log.info("error json node {}", e.getMessage());
+                    // fallback ke non-json
+                    try {
+                        String raw = Objects.requireNonNull(response.getBody()).get("response").toString();
+                        saveToFileNonJson(raw, type);
+                    } catch (Exception ex) {
+                        log.error("error save non json {}", ex.getMessage());
+                    }
                 }
             }
         }
@@ -631,6 +605,44 @@ function filterTable(input, colIndex) {
         System.out.println("HTML updated: " + filePath.toAbsolutePath());
     }
 
+    private void saveToFileNonJson(String content, String type) throws Exception {
+
+        String folderPath = "summary";
+        Path directory = Paths.get(folderPath);
+
+        if (!Files.exists(directory)) {
+            Files.createDirectories(directory);
+        }
+
+        String fileName = type.toLowerCase() + "_raw.html";
+        Path filePath = directory.resolve(fileName);
+
+        String html = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Raw Output</title>
+<style>
+body { font-family: monospace; white-space: pre-wrap; padding: 20px; }
+</style>
+</head>
+<body>
+""" + escapeHtml(content) + """
+</body>
+</html>
+""";
+
+        Files.writeString(
+                filePath,
+                html,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND
+        );
+
+        System.out.println("RAW HTML saved: " + filePath.toAbsolutePath());
+    }
+
     public List<String> buildPromptClient2Be(String jsonData) {
         List<String> prompts = new ArrayList<>();
         prompts.add(jsonData);
@@ -662,10 +674,10 @@ function filterTable(input, colIndex) {
         return raw;
     }
 
-
-
-
-
-
-
+    private String escapeHtml(String text) {
+        return text
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+    }
 }
