@@ -24,7 +24,7 @@ public class AiBaseKnowledgeService {
     @Value("${ai.model.base.knowledge}")
     private String aiModel;
 
-    @Value("${ai.model.context.base.knowledge}")
+    @Value("${ai.model.context.base.knowledge.max}")
     private int contextWindow;
 
     private static final int reservedTokens= 500;
@@ -403,7 +403,16 @@ public class AiBaseKnowledgeService {
         if(type.equals("client2be")) {
 
             systemPrompt = """
-                    change to beautify json!
+                    You are a JSON formatter.
+                    
+                                             You MUST follow these rules:
+                                             - Output ONLY valid JSON
+                                             - Do NOT explain anything
+                                             - Do NOT add any text
+                                             - Do NOT summarize
+                                             - Do NOT change data
+                                             - Only format (indentation)
+                                             If you add any text, the answer is WRONG.
                     """;
 
             List<String> userPrompts = buildPromptClient2Be(dataJson);
