@@ -2,17 +2,17 @@ package com.example.migrasi.util;
 
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.DateUtil;
-import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 @Slf4j
 @UtilityClass
@@ -106,6 +106,79 @@ public class MyExcelDoc {
         }
 
         throw new IllegalArgumentException("Unsupported type: " + value.getClass());
+    }
+
+    public static List<Map<String, String>> findAllByColumn(
+            MultipartFile file,
+            int sheetIndex,
+            String columnName,
+            String value
+    ) {
+
+        List<Map<String, String>> result = new ArrayList<>();
+
+        try (InputStream is = file.getInputStream();
+
+             Workbook workbook = new XSSFWorkbook(is)) {
+
+            if (sheetIndex < 0 || sheetIndex >= workbook.getNumberOfSheets()) {
+                throw new IllegalArgumentException(
+                        "Sheet index tidak valid: " + sheetIndex +
+                                ", total sheet: " + workbook.getNumberOfSheets()
+                );
+            }
+
+            Sheet sheet = workbook.getSheetAt(sheetIndex);
+
+            Iterator<Row> rows = sheet.iterator();
+
+            if (!rows.hasNext()) return result;
+
+            Row headerRow = rows.next();
+            Map<String, Integer> colIndex = buildColumnIndex(headerRow);
+
+            while (rows.hasNext()) {
+                Row row = rows.next();
+
+                String cellValue = getValueExcel(row, colIndex, columnName);
+
+                if (cellValue != null && cellValue.equalsIgnoreCase(value)) {
+
+                    Map<String, String> data = new HashMap<>();
+
+                    for (String col : colIndex.keySet()) {
+                        data.put(col, getValueExcel(row, colIndex, col));
+                    }
+
+                    result.add(data);
+                }
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Gagal baca Excel", e);
+        }
+
+        return result;
+    }
+
+    public static Integer parseIntOrDefault(String value, int defaultValue) {
+        try {
+            return (value == null || value.isBlank())
+                    ? defaultValue
+                    : Integer.parseInt(value);
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    public static Long parseLongOrDefault(String value, long defaultValue) {
+        try {
+            return (value == null || value.isBlank())
+                    ? defaultValue
+                    : Long.parseLong(value);
+        } catch (Exception e) {
+            return defaultValue;
+        }
     }
 
 
