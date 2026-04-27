@@ -13,6 +13,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @UtilityClass
@@ -179,6 +180,15 @@ public class MyExcelDoc {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    public static List<Map<String, String>> findAllByKey(
+            List<Map<String, String>> data,
+            String key
+    ) {
+        return data.stream()
+                .filter(map -> map.containsKey(key))
+                .toList();
     }
 
 
