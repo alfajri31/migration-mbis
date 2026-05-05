@@ -2,6 +2,8 @@ package com.example.migrasi.AI;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +27,10 @@ public class AiBaseKnowledgeService {
     private String aiModel;
 
     @Value("${ai.model.context.base.knowledge.max}")
-    private int contextWindow;
+    private int maxContextWindow;
+
+    @Value("${ai.model.context.base.knowledge.use}")
+    private int useContextWindow;
 
     private static final int reservedTokens= 500;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -35,12 +40,13 @@ public class AiBaseKnowledgeService {
     // =========================
     public void processKnowledgeBase(Map<String, List<String>> data, String type) throws Exception {
 
-        int safeContextWindow = contextWindow - reservedTokens;
+        int safeContextWindow = useContextWindow - reservedTokens;
 
-        if (isTokenOverflow(data, safeContextWindow)) {
+        if (isTokenOverflow(data, useContextWindow)) {
             log.warn("Can't be proceed: tokens will be overflow");
-            return;
         }
+
+        data = trimSize(data);
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -730,5 +736,131 @@ body { font-family: monospace; white-space: pre-wrap; padding: 20px; }
 
     private String getChatResponse(ResponseEntity<Map> response) {
         return Objects.requireNonNull(response.getBody()).get("message").toString();
+    }
+
+    public Map<String, List<String>> trimSize(Map<String, List<String>> data) {
+
+        int maxTokens = useContextWindow;
+
+        Map<String, List<String>> result = new HashMap<>();
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        for (Map.Entry<String, List<String>> entry : data.entrySet()) {
+
+            String key = entry.getKey();
+
+            List<String> value = entry.getValue();
+
+            List<String> outputList = new ArrayList<>();
+
+            for (String item : value) {
+
+                String cleanedItem = removeDdl(item);
+
+                int itemTokens = estimateTokens(cleanedItem);
+
+                if (itemTokens > maxTokens) {
+                    outputList.addAll(splitJsonObject(cleanedItem, maxTokens, mapper));
+                } else {
+                    outputList.add(cleanedItem);
+                }
+            }
+
+            result.put(key, outputList);
+        }
+
+        return result;
+    }
+
+    private String removeDdl(String json) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(json);
+
+            if (root instanceof ObjectNode) {
+                ((ObjectNode) root).remove("ddl");
+            }
+
+            return mapper.writeValueAsString(root);
+
+        } catch (Exception e) {
+            return json; // fallback kalau error
+        }
+    }
+
+    private List<String> splitJsonObject(String json, int maxTokens, ObjectMapper mapper) {
+
+        List<String> result = new ArrayList<>();
+
+        try {
+            JsonNode root = mapper.readTree(json);
+
+            JsonNode targetArray = null;
+            String targetKey = null;
+
+            // 🔥 cari array di root (misal: rows)
+            Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> entry = fields.next();
+                JsonNode node = entry.getValue();
+
+                if (node.isArray()) {
+                    targetArray = node;
+                    targetKey = entry.getKey();
+                    break;
+                }
+            }
+
+            // ❌ tidak ada array → tidak bisa split
+            if (targetArray == null || !targetArray.isArray()) {
+                result.add(json);
+                return result;
+            }
+
+            // 🔥 split array
+            List<JsonNode> batch = new ArrayList<>();
+            int currentTokens = 0;
+
+            for (JsonNode element : targetArray) {
+
+                String elementStr = mapper.writeValueAsString(element);
+                int tokens = estimateTokens(elementStr);
+
+                if (currentTokens + tokens > maxTokens && !batch.isEmpty()) {
+
+                    result.add(buildJson(root, targetKey, batch, mapper));
+                    batch.clear();
+                    currentTokens = 0;
+                }
+
+                batch.add(element);
+                currentTokens += tokens;
+            }
+
+            if (!batch.isEmpty()) {
+                result.add(buildJson(root, targetKey, batch, mapper));
+            }
+
+        } catch (Exception e) {
+            result.add(json);
+        }
+
+        return result;
+    }
+
+    private String buildJson(JsonNode original, String targetKey, List<JsonNode> batch, ObjectMapper mapper) throws Exception {
+
+        ObjectNode newRoot = original.deepCopy();
+
+        ArrayNode newArray = mapper.createArrayNode();
+        for (JsonNode n : batch) {
+            newArray.add(n);
+        }
+
+        newRoot.set(targetKey, newArray);
+
+        return mapper.writeValueAsString(newRoot);
     }
 }
